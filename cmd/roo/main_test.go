@@ -27,32 +27,36 @@ func TestExecuteCommand(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	tests := []struct {
-		name     string
-		command  string
-		input    string
-		response string
-		wantErr  bool
+		name       string
+		command    string
+		input      string
+		targetFile string
+		response   string
+		wantErr    bool
 	}{
 		{
-			name:     "explain command",
-			command:  "explain",
-			input:    "func main() {}",
-			response: "This is a simple main function.",
-			wantErr:  false,
+			name:       "explain command",
+			command:    "explain",
+			input:      "func main() {}",
+			targetFile: "",
+			response:   "This is a simple main function.",
+			wantErr:    false,
 		},
 		{
-			name:     "chat command",
-			command:  "chat",
-			input:    "コードを改善してください",
-			response: "はい、改善案を提示します。",
-			wantErr:  false,
+			name:       "chat command",
+			command:    "chat",
+			input:      "コードを改善してください",
+			targetFile: "test.go",
+			response:   "はい、改善案を提示します。",
+			wantErr:    false,
 		},
 		{
-			name:     "unknown command",
-			command:  "unknown",
-			input:    "",
-			response: "",
-			wantErr:  true,
+			name:       "unknown command",
+			command:    "unknown",
+			input:      "",
+			targetFile: "",
+			response:   "",
+			wantErr:    true,
 		},
 	}
 
@@ -66,7 +70,7 @@ func TestExecuteCommand(t *testing.T) {
 			// テストケース用のバックアップディレクトリを作成
 			backupDir := filepath.Join(tempDir, tt.name)
 
-			got, err := executeCommand(client, tt.command, tt.input, backupDir)
+			got, err := executeCommand(client, tt.command, tt.input, tt.targetFile, backupDir)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("executeCommand() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -123,16 +127,18 @@ func TestExecuteChat(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	tests := []struct {
-		name     string
-		input    string
-		response string
-		wantErr  bool
+		name       string
+		input      string
+		targetFile string
+		response   string
+		wantErr    bool
 	}{
 		{
-			name:     "simple chat",
-			input:    "コードを改善してください",
-			response: "はい、改善案を提示します。",
-			wantErr:  false,
+			name:       "simple chat",
+			input:      "コードを改善してください",
+			targetFile: "test.go",
+			response:   "はい、改善案を提示します。",
+			wantErr:    false,
 		},
 	}
 
@@ -146,7 +152,7 @@ func TestExecuteChat(t *testing.T) {
 			// テストケース用のバックアップディレクトリを作成
 			backupDir := filepath.Join(tempDir, tt.name)
 
-			got, err := executeChat(client, tt.input, backupDir)
+			got, err := executeChat(client, tt.input, tt.targetFile, backupDir)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("executeChat() error = %v, wantErr %v", err, tt.wantErr)
 				return

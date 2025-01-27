@@ -23,7 +23,8 @@ type APIClient interface {
 func main() {
 	// コマンドライン引数の設定
 	var (
-		input     = flag.String("input", "", "Input text or file path")
+		input     = flag.String("input", "", "Input text for the chat")
+		file      = flag.String("file", "", "Target file path for patch proposals")
 		backupDir = flag.String("backup-dir", "", "Directory for backup files")
 	)
 	flag.Parse()
@@ -70,9 +71,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize API client: %v", err)
 	}
-
 	// コマンドの実行
-	result, err := executeCommand(client, command, inputText, *backupDir)
+	result, err := executeCommand(client, command, inputText, *file, *backupDir)
+	result, err = executeCommand(client, command, inputText, *file, *backupDir)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
@@ -81,12 +82,12 @@ func main() {
 }
 
 // executeCommand executes the specified command with the given input
-func executeCommand(client APIClient, command, input, backupDir string) (string, error) {
+func executeCommand(client APIClient, command, input, targetFile, backupDir string) (string, error) {
 	switch command {
 	case "explain":
 		return executeExplain(client, input)
 	case "chat":
-		return executeChat(client, input, backupDir)
+		return executeChat(client, input, targetFile, backupDir)
 	default:
 		return "", fmt.Errorf("unknown command: %s", command)
 	}
@@ -109,7 +110,7 @@ func executeExplain(client APIClient, code string) (string, error) {
 }
 
 // executeChat handles the chat command
-func executeChat(client APIClient, input, backupDir string) (string, error) {
+func executeChat(client APIClient, input, targetFile, backupDir string) (string, error) {
 	// バックアップディレクトリの設定
 	if backupDir == "" {
 		homeDir, err := os.UserHomeDir()
