@@ -126,7 +126,19 @@ func executeChat(client APIClient, input, targetFile, backupDir string) (string,
 	if err != nil {
 		return "", fmt.Errorf("failed to initialize chat executor: %w", err)
 	}
+	// ファイルの内容を読み取る（ファイルパスが指定されている場合）
+	var content string
+	if targetFile != "" {
+		fileContent, err := os.ReadFile(targetFile)
+		if err != nil {
+			return "", fmt.Errorf("ファイルの読み取りに失敗しました: %w", err)
+		}
+		content = fmt.Sprintf("以下のファイルの内容を改善してください:\n\n%s\n\n%s", targetFile, string(fileContent))
+	} else {
+		content = input
+	}
 
 	// チャットの実行
+	return executor.Execute(content)
 	return executor.Execute(input)
 }
