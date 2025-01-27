@@ -7,8 +7,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/cmd/roo-helper/api"
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/cmd/roo-helper/models"
+	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/api"
+	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/models"
 )
 
 // APIClient インターフェースを定義

@@ -1,71 +1,64 @@
-# hello-vim-plugin-2
+# Roo CLI
 
-Roo Code VSCode拡張の機能をVimプラグインとして実装するプロジェクト。
+Roo CLIは、OpenAI GPT-4を活用したコードの説明や対話を行うためのコマンドラインツールです。
 
-## ドキュメント構成
+## 機能
 
-### コア設計
-- `docs/MVP.md` - 最小実装の機能定義
-  - チャット機能
-  - ファイルコンテキスト機能の仕様
-
-- `docs/ARCHITECTURE.md` - 全体アーキテクチャ設計
-  - システム構成
-  - データフロー
-  - コンポーネント間の関係
-
-### 実装設計
-- `docs/IMPLEMENTATION_PLAN.md` - 実装の詳細計画
-  - Vimプラグインの構造
-  - コンポーネント設計
-  - 実装手順と優先順位
-
-- `docs/GO_IMPLEMENTATION.md` - バックエンド設計
-  - API通信の実装
-  - プロンプト処理
-  - エラーハンドリング
-
-- `docs/CHAT_INTERFACE.md` - チャットUI設計
-  - バッファレイアウト
-  - キーマッピング
-  - インタラクション設計
-
-### ユーザードキュメント
-- `doc/roo.txt` - Vimヘルプドキュメント
-  - インストール方法
-  - 使用方法
-  - コマンドリファレンス
-
-## 開発環境
-
-- Vim 8.1以上
-- Go 1.21以上
-- curl（API通信用）
+- コードの説明（explain）: 指定したコードの説明を生成
+- チャット（chat）: GPT-4との対話機能
 
 ## インストール
 
 ```bash
-# プラグインのインストール
-git clone https://github.com/yourusername/hello-vim-plugin-2.git ~/.vim/pack/plugins/start/hello-vim-plugin-2
-
-# Goバックエンドのビルド
-cd ~/.vim/pack/plugins/start/hello-vim-plugin-2
-go build -o bin/roo-helper cmd/roo-helper/main.go
+go install github.com/rooveterinaryinc/hello-vim-plugin-2/cmd/roo@latest
 ```
 
 ## 使用方法
 
-```vim
-" チャットの開始
-:RooChat
+### 環境変数の設定
 
-" ファイルについてのチャット
-:RooChatFile %
-
-" モードの切り替え
-:RooMode
+```bash
+export OPENAI_API_KEY="your-api-key"
 ```
+
+### コードの説明
+
+```bash
+roo -command explain -input "func hello() { fmt.Println('Hello, World!') }"
+```
+
+### チャット
+
+```bash
+roo -command chat -input '[{"role":"user","content":"Goでの並行処理について説明してください"}]'
+```
+
+## レスポンス形式
+
+すべてのコマンドは以下の形式でJSONレスポンスを返します：
+
+```json
+{
+  "success": true,
+  "data": "レスポンスの内容",
+  "error": null
+}
+```
+
+エラーの場合：
+
+```json
+{
+  "success": false,
+  "data": null,
+  "error": "エラーメッセージ"
+}
+```
+
+## 詳細な使用例
+
+より詳細な使用例については、[USAGE.md](docs/USAGE.md)を参照してください。sedやgrepを使用したコードの抽出方法や、gitとの連携など、実践的な使用例を紹介しています。
 
 ## ライセンス
 
-MIT
+MIT License

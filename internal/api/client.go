@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/cmd/roo-helper/models"
+	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/models"
 )
 
 const (
