@@ -56,8 +56,13 @@ func NewExecutor(client ChatClient, backupDir string) (*Executor, error) {
 }
 
 // Execute はチャットを実行し、必要に応じて提案を処理します。
-func (e *Executor) Execute(input string) (string, error) {
+func (e *Executor) Execute(input string, targetFile string) (string, error) {
 	// 1. メッセージの準備
+	content := input
+	if targetFile != "" {
+		content = fmt.Sprintf("対象ファイル: %s\n\n%s", targetFile, input)
+	}
+
 	messages := []Message{
 		{
 			Role:    "system",
@@ -65,7 +70,7 @@ func (e *Executor) Execute(input string) (string, error) {
 		},
 		{
 			Role:    "user",
-			Content: input,
+			Content: content,
 		},
 	}
 

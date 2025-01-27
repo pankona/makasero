@@ -139,6 +139,6 @@ func executeChat(client APIClient, input, targetFile, backupDir string) (string,
 	}
 
 	// チャットの実行
-	return executor.Execute(content)
+	return executor.Execute(content, targetFile)
 	return executor.Execute(input)
 }

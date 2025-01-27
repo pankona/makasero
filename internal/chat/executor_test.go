@@ -55,11 +55,12 @@ func TestExecutor_Execute(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	tests := []struct {
-		name     string
-		client   *mockChatClient
-		input    string
-		approved bool
-		wantErr  bool
+		name       string
+		client     *mockChatClient
+		input      string
+		targetFile string
+		approved   bool
+		wantErr    bool
 	}{
 		{
 			name: "正常系：提案なし",
@@ -67,9 +68,10 @@ func TestExecutor_Execute(t *testing.T) {
 				response: "はい、その実装で問題ありません。",
 				err:      nil,
 			},
-			input:    "コードをレビューしてください",
-			approved: false,
-			wantErr:  false,
+			input:      "コードをレビューしてください",
+			targetFile: "",
+			approved:   false,
+			wantErr:    false,
 		},
 		{
 			name: "正常系：提案あり（承認）",
@@ -83,9 +85,10 @@ test.go
 ---END---`,
 				err: nil,
 			},
-			input:    "コードを改善してください",
-			approved: true,
-			wantErr:  false,
+			input:      "コードを改善してください",
+			targetFile: "test.go",
+			approved:   true,
+			wantErr:    false,
 		},
 		{
 			name: "正常系：提案あり（非承認）",
@@ -99,9 +102,10 @@ test.go
 ---END---`,
 				err: nil,
 			},
-			input:    "コードを改善してください",
-			approved: false,
-			wantErr:  false,
+			input:      "コードを改善してください",
+			targetFile: "test.go",
+			approved:   false,
+			wantErr:    false,
 		},
 		{
 			name: "異常系：APIエラー",
@@ -109,9 +113,10 @@ test.go
 				response: "",
 				err:      errors.New("API error"),
 			},
-			input:    "テスト",
-			approved: false,
-			wantErr:  true,
+			input:      "テスト",
+			targetFile: "",
+			approved:   false,
+			wantErr:    true,
 		},
 	}
 
@@ -124,7 +129,7 @@ test.go
 				handler:  newTestHandler(tt.approved, nil, nil),
 			}
 
-			response, err := executor.Execute(tt.input)
+			response, err := executor.Execute(tt.input, tt.targetFile)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
 				return
