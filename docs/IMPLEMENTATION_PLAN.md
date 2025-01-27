@@ -1,231 +1,233 @@
-# Go CLI実装計画
+# 実装計画：プロンプトベースの提案システム
 
-## 1. コンポーネント構成
+## 1. コアコンポーネント
 
-### パッケージ構成
-```
-cmd/roo/          # CLIエントリーポイント
-├── main.go       # メインプログラム
-└── main_test.go  # メインのテスト
-
-internal/         # 内部パッケージ
-├── api/          # APIクライアント
-│   ├── client.go
-│   └── client_test.go
-├── models/       # データモデル
-│   └── api.go
-└── proposal/     # コード提案システム
-    ├── manager.go
-    ├── diff.go
-    └── approval.go
-```
-
-## 2. コアコンポーネント
-
-### 2.1 CLIエントリーポイント（cmd/roo/main.go）
+### プロンプト設計
 ```go
-func main() {
-    // コマンドライン引数の処理
-    command := flag.String("command", "", "Command to execute")
-    input := flag.String("input", "", "Input data")
-    flag.Parse()
+// internal/chat/prompts/proposal.go
+const (
+    ProposalSystemPrompt = `あなたはコードレビューと改善提案を行う専門家です。
+コードの改善提案を行う場合は、必ず以下の形式で回答してください：
 
-    // APIクライアントの初期化
-    client, err := api.NewClient()
-    if err != nil {
-        // エラー処理
+---PROPOSAL---
+[提案の説明]
+
+---FILE---
+[対象ファイルパス]
+
+---DIFF---
+[変更内容]
+---END---
+
+提案ではない場合は、通常の形式で回答してください。`
+)
+```
+
+### 提案検出
+```go
+// internal/chat/detector/proposal.go
+type ProposalDetector struct {
+    markers struct {
+        proposal string
+        file     string
+        diff     string
+        end      string
+    }
+}
+
+func (d *ProposalDetector) IsProposal(response string) bool {
+    return strings.Contains(response, d.markers.proposal)
+}
+
+func (d *ProposalDetector) Extract(response string) (*Proposal, error) {
+    if !d.IsProposal(response) {
+        return nil, nil
+    }
+    // マーカーに基づいて提案を抽出
+    return extractProposal(response)
+}
+```
+
+### 提案処理
+```go
+// internal/chat/handler/proposal.go
+type ProposalHandler struct {
+    approver Approver
+    applier  Applier
+}
+
+func (h *ProposalHandler) Handle(proposal *Proposal) error {
+    // 1. 提案の表示
+    // 2. 承認の取得
+    // 3. 変更の適用
+}
+```
+
+## 2. インターフェース定義
+
+### チャットクライアント
+```go
+// internal/chat/client.go
+type ChatClient interface {
+    Execute(prompt string, messages []Message) (string, error)
+}
+
+type Message struct {
+    Role    string
+    Content string
+}
+```
+
+### 承認インターフェース
+```go
+// internal/chat/approval.go
+type Approver interface {
+    GetApproval(proposal *Proposal) (bool, error)
+}
+
+type ConsoleApprover struct{}
+```
+
+### 変更適用インターフェース
+```go
+// internal/chat/apply.go
+type Applier interface {
+    Apply(proposal *Proposal) error
+}
+
+type FileApplier struct{}
+```
+
+## 3. メインフロー実装
+
+### チャット実行
+```go
+// cmd/roo/main.go
+func executeChat(client ChatClient, input string) error {
+    // 1. システムプロンプトの設定
+    messages := []Message{
+        {Role: "system", Content: ProposalSystemPrompt},
+        {Role: "user", Content: input},
     }
 
-    // コマンドの実行
-    result, err := executeCommand(client, *command, *input)
-    // 結果の出力
+    // 2. チャットの実行
+    response, err := client.Execute(input, messages)
+    if err != nil {
+        return err
+    }
+
+    // 3. 提案の検出と処理
+    detector := NewProposalDetector()
+    if proposal, err := detector.Extract(response); err != nil {
+        return err
+    } else if proposal != nil {
+        handler := NewProposalHandler()
+        return handler.Handle(proposal)
+    }
+
+    return nil
 }
 ```
 
-### 2.2 APIクライアント（internal/api/client.go）
+## 4. エラー処理
+
+### カスタムエラー
 ```go
-type Client struct {
-    httpClient *http.Client
-    apiKey     string
-    baseURL    string
+// internal/chat/errors.go
+type ProposalError struct {
+    Phase   string
+    Message string
+    Err     error
 }
 
-func (c *Client) CreateChatCompletion(messages []models.ChatMessage) (string, error) {
-    // OpenAI APIとの通信
-    // レスポンスの処理
-    // エラーハンドリング
-}
+var (
+    ErrInvalidFormat = errors.New("不正な提案フォーマット")
+    ErrFileNotFound  = errors.New("対象ファイルが見つかりません")
+    ErrApplyFailed   = errors.New("変更の適用に失敗しました")
+)
 ```
 
-### 2.3 データモデル（internal/models/api.go）
+## 5. テスト実装
+
+### プロンプトテスト
 ```go
-type ChatMessage struct {
-    Role    string `json:"role"`
-    Content string `json:"content"`
-}
-
-type Response struct {
-    Success bool        `json:"success"`
-    Data    interface{} `json:"data,omitempty"`
-    Error   string      `json:"error,omitempty"`
+// internal/chat/prompts/proposal_test.go
+func TestProposalFormat(t *testing.T) {
+    // システムプロンプトのテスト
+    // レスポンスフォーマットの検証
 }
 ```
 
-### 2.4 コード提案システム（internal/proposal/）
+### 検出テスト
 ```go
-// manager.go
-type ProposalManager struct {
-    client    *api.Client
-    diffUtil  *DiffUtility
-    approver  UserApprover
-}
-
-// diff.go
-type DiffUtility struct {
-    // 差分処理機能
-}
-
-// approval.go
-type UserApprover interface {
-    RequestApproval(proposal *CodeProposal) (bool, error)
+// internal/chat/detector/proposal_test.go
+func TestProposalDetection(t *testing.T) {
+    // 提案検出のテスト
+    // 各セクションの抽出テスト
 }
 ```
 
-## 3. コマンド実装
-
-### 3.1 explainコマンド
-- コードの説明生成
-- システムプロンプトの設定
-- エラーハンドリング
-
-### 3.2 chatコマンド
-- 対話形式の通信
-- メッセージ履歴の管理
-- JSONパース処理
-
-### 3.3 proposeコマンド
-- コード提案の生成
-- 差分の表示と管理
-- ユーザー承認フロー
-- コード適用処理
-
-## 4. 実装手順
-
-### フェーズ1: 基本機能（2-3日）
-1. プロジェクト構造の設定
-   - ディレクトリ構造
-   - go.mod設定
-   - Makefile作成
-
-2. APIクライアント実装
-   - OpenAI API通信
-   - エラーハンドリング
-   - タイムアウト設定
-
-3. CLIインターフェース
-   - フラグ処理
-   - サブコマンド
-   - 出力フォーマット
-
-### フェーズ2: 機能拡張（2-3日）
-1. コマンド機能
-   - explainの実装
-   - chatの実装
-   - テストの作成
-
-2. エラー処理
-   - エラーメッセージ
-   - リトライ処理
-   - ログ出力
-
-### フェーズ3: コード提案システム（3-4日）
-1. 基本構造
-   - ProposalManagerの実装
-   - DiffUtilityの実装
-   - UserApproverインターフェース
-
-2. 差分処理
-   - パッチ生成
-   - 差分表示
-   - ファイル操作
-
-3. 承認フロー
-   - インタラクティブな承認UI
-   - 適用モード選択
-   - エラーハンドリング
-
-### フェーズ4: 最適化とテスト（2-3日）
-1. パフォーマンス
-   - 並行処理
-   - メモリ最適化
-   - タイムアウト調整
-
-2. テスト拡充
-   - 提案システムのユニットテスト
-   - 差分処理のテスト
-   - 承認フローのテスト
-
-3. ドキュメント
-   - README
-   - USAGE.md
-   - コードコメント
-
-## 5. テスト計画
-
-### 5.1 ユニットテスト
+### 統合テスト
 ```go
-func TestExecuteCommand(t *testing.T) {
-    // コマンド実行のテスト
-}
-
-func TestCreateChatCompletion(t *testing.T) {
-    // API通信のテスト
-}
-
-func TestProposalManager(t *testing.T) {
-    // 提案システムのテスト
-}
-
-func TestDiffUtility(t *testing.T) {
-    // 差分処理のテスト
+// cmd/roo/main_test.go
+func TestChatWithProposal(t *testing.T) {
+    // エンドツーエンドテスト
+    // モックレスポンスの使用
 }
 ```
 
-### 5.2 統合テスト
-```go
-func TestEndToEnd(t *testing.T) {
-    // E2Eテストシナリオ
-}
+## 6. 実装手順
 
-func TestProposalWorkflow(t *testing.T) {
-    // 提案ワークフローのテスト
-}
-```
+1. 基盤実装（2日）
+   - プロンプト設計の実装
+   - 基本インターフェースの定義
+   - エラー型の定義
 
-## 6. 成功基準
+2. コア機能実装（3日）
+   - 提案検出の実装
+   - 提案処理の実装
+   - ファイル操作の実装
 
-1. 基本機能
-- すべてのコマンドが正常に動作
-- エラー処理が適切に機能
-- JSONレスポンスが正しい形式
+3. テスト実装（2日）
+   - ユニットテストの作成
+   - 統合テストの作成
+   - エッジケースの検証
 
-2. コード提案システム
-- 正確な差分生成
-- 信頼性の高い適用処理
-- ユーザーフレンドリーな承認フロー
+4. リファクタリング（1日）
+   - コードの最適化
+   - エラー処理の改善
+   - パフォーマンスの調整
 
-3. パフォーマンス
-- レスポンス時間が適切
-- メモリ使用が最適
-- エラー発生時の適切な処理
+5. ドキュメント更新（1日）
+   - コメントの追加
+   - README の更新
+   - 使用例の追加
 
-4. 品質
-- テストカバレッジ80%以上
-- リントエラーなし
-- ドキュメント完備
+## 7. 成功基準
 
-5. 使いやすさ
-- 直感的なコマンド
-- 分かりやすいエラーメッセージ
-- 詳細なヘルプ情報
-- 提案内容の明確な表示
+### 機能要件
+- [ ] 提案の正確な検出
+- [ ] 安全なファイル操作
+- [ ] 明確なエラーメッセージ
+
+### 非機能要件
+- [ ] 90%以上のテストカバレッジ
+- [ ] エラー時の適切なフォールバック
+- [ ] 分かりやすいドキュメント
+
+## 8. 将来の拡張性
+
+1. プロンプトの拡張
+- 複数ファイルの提案対応
+- コンテキストの活用
+- カスタムフォーマット
+
+2. 機能の拡張
+- 提案履歴の管理
+- バッチ処理対応
+- IDE統合
+
+3. UI/UX改善
+- リッチな差分表示
+- インタラクティブな編集
+- 進捗表示

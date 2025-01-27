@@ -1,211 +1,242 @@
-# チャットインターフェース設計
+# チャットインターフェースと提案システム
 
-## 1. インターフェース設計
+## 概要
 
-### 1.1 コマンドライン引数
-```bash
-roo -command chat -input '[{"role":"user","content":"Hello"}]'
-roo -command explain -input "fmt.Println('Hello, World!')"
-```
+チャットインターフェースを通じてコード提案を統合的に扱う新しいアーキテクチャを提案します。
+AIプロンプトを活用して、明確な構造を持つレスポンスを得ることで、信頼性の高い提案システムを実現します。
 
-### 1.2 出力フォーマット
-```json
-{
-  "success": true,
-  "data": "応答内容",
-  "error": null
-}
-```
+## プロンプト設計
 
-## 2. コマンド仕様
+### 1. システムプロンプト
 
-### 2.1 chatコマンド
-```bash
-# 単一メッセージ
-roo -command chat -input '[
-  {"role":"user","content":"こんにちは"}
-]'
-
-# 会話の文脈を含むメッセージ
-roo -command chat -input '[
-  {"role":"system","content":"あなたはプログラミング講師です"},
-  {"role":"user","content":"Goの並行処理について教えてください"},
-  {"role":"assistant","content":"Goの並行処理は..."},
-  {"role":"user","content":"もう少し詳しく説明してください"}
-]'
-```
-
-### 2.2 explainコマンド
-```bash
-# 直接コードを指定
-roo -command explain -input "func add(a, b int) int { return a + b }"
-
-# ファイルからコードを読み込んで説明
-cat main.go | roo -command explain -input "$(cat)"
-```
-
-## 3. 実装詳細
-
-### 3.1 メッセージ処理
 ```go
-// メッセージ構造
-type ChatMessage struct {
-    Role    string `json:"role"`
-    Content string `json:"content"`
-}
+const systemPrompt = `あなたはコードレビューと改善提案を行う専門家です。
+コードの改善提案を行う場合は、必ず以下の形式で回答してください：
 
-// チャットリクエスト
-type ChatRequest struct {
-    Model    string        `json:"model"`
-    Messages []ChatMessage `json:"messages"`
-}
+---PROPOSAL---
+[提案の説明]
 
-// レスポンス構造
-type Response struct {
-    Success bool        `json:"success"`
-    Data    interface{} `json:"data,omitempty"`
-    Error   string      `json:"error,omitempty"`
-}
+---FILE---
+[対象ファイルパス]
+
+---DIFF---
+[変更内容]
+---END---
+
+提案ではない場合は、通常の形式で回答してください。`
 ```
 
-### 3.2 APIクライアント
+### 2. レスポンス構造
+
+提案を含むレスポンスの例：
+```
+コードを分析しました。以下の改善を提案します：
+
+---PROPOSAL---
+エラーハンドリングを改善し、ログ出力を追加します。
+
+---FILE---
+internal/api/client.go
+
+---DIFF---
+@@ -10,6 +10,7 @@
+ func (c *Client) Execute() error {
+-    result := process()
++    result, err := process()
++    if err != nil {
++        log.Printf("処理エラー: %v", err)
++        return fmt.Errorf("実行エラー: %w", err)
++    }
+     return nil
+ }
+---END---
+```
+
+通常のレスポンス例：
+```
+はい、その実装は正しいです。特に改善の必要はありません。
+```
+
+## 実装設計
+
+### 1. 提案検出
+
 ```go
-// APIクライアント
-type Client struct {
-    httpClient *http.Client
-    apiKey     string
-    baseURL    string
+// internal/chat/proposal.go
+type ProposalDetector struct {
+    // 提案のマーカー
+    proposalMarker    string
+    fileMarker       string
+    diffMarker       string
+    endMarker        string
 }
 
-// チャット完了リクエスト
-func (c *Client) CreateChatCompletion(messages []ChatMessage) (string, error) {
-    req := &ChatRequest{
-        Model:    "gpt-4",
-        Messages: messages,
+func (d *ProposalDetector) IsProposal(response string) bool {
+    return strings.Contains(response, "---PROPOSAL---")
+}
+
+func (d *ProposalDetector) ExtractProposal(response string) (*CodeProposal, error) {
+    if !d.IsProposal(response) {
+        return nil, nil
     }
-    
-    // APIリクエストの送信と応答の処理
-    return c.sendRequest(req)
-}
-```
 
-## 4. エラーハンドリング
-
-### 4.1 入力検証
-```go
-func validateInput(input string) error {
-    if input == "" {
-        return errors.New("input is required")
+    // マーカーに基づいて各セクションを抽出
+    proposal := &CodeProposal{
+        Description: extractSection(response, "PROPOSAL", "FILE"),
+        FilePath:    extractSection(response, "FILE", "DIFF"),
+        Diff:        extractSection(response, "DIFF", "END"),
     }
-    return nil
+
+    return proposal, nil
 }
 ```
 
-### 4.2 APIエラー処理
+### 2. チャット実行
+
 ```go
-func handleAPIError(resp *http.Response) error {
-    var errResp ErrorResponse
-    if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-        return fmt.Errorf("API error (status %d)", resp.StatusCode)
-    }
-    return fmt.Errorf("API error: %s", errResp.Error.Message)
-}
-```
-
-## 5. 使用例
-
-### 5.1 シェルスクリプトとの連携
-```bash
-#!/bin/bash
-
-# コードレビュー支援
-review_code() {
-    git diff | roo -command explain -input "$(cat)"
-}
-
-# チャットセッション
-chat_session() {
-    message=$1
-    history_file=".chat_history.json"
-    
-    if [ ! -f "$history_file" ]; then
-        echo "[]" > "$history_file"
-    fi
-    
-    # 履歴を読み込んで新しいメッセージを追加
-    new_history=$(jq --arg msg "$message" '. + [{"role":"user","content":$msg}]' "$history_file")
-    response=$(echo "$new_history" | roo -command chat -input "$(cat)")
-    
-    # 応答を履歴に追加
-    echo "$response" | jq -r '.data' | \
-        jq --arg content "$(cat)" '. + [{"role":"assistant","content":$content}]' > "$history_file"
-}
-```
-
-### 5.2 パイプラインでの使用
-```bash
-# ソースコードの説明
-find . -name "*.go" -exec cat {} \; | roo -command explain -input "$(cat)"
-
-# コミットメッセージの生成
-git diff | roo -command chat -input '[
-  {"role":"system","content":"コミットメッセージを生成してください"},
-  {"role":"user","content":"'"$(cat)"'"}
-]' | jq -r .data
-```
-
-## 6. パフォーマンス最適化
-
-### 6.1 タイムアウト設定
-```go
-const defaultTimeout = 30 * time.Second
-
-client := &http.Client{
-    Timeout: defaultTimeout,
-}
-```
-
-### 6.2 メモリ効率
-```go
-// 大きな入力の効率的な処理
-func processLargeInput(reader io.Reader) error {
-    scanner := bufio.NewScanner(reader)
-    scanner.Buffer(make([]byte, 1024*1024), 1024*1024*10)
-    
-    for scanner.Scan() {
-        // 1行ずつ処理
-    }
-    return scanner.Err()
-}
-```
-
-## 7. テスト方針
-
-### 7.1 ユニットテスト
-```go
-func TestCreateChatCompletion(t *testing.T) {
-    client := NewTestClient(t)
+// internal/chat/executor.go
+func executeChat(client APIClient, input string) (string, error) {
+    // システムプロンプトを追加
     messages := []ChatMessage{
-        {Role: "user", Content: "Hello"},
+        {
+            Role:    "system",
+            Content: systemPrompt,
+        },
+        {
+            Role:    "user",
+            Content: input,
+        },
     }
-    
+
+    // AIとの対話
     response, err := client.CreateChatCompletion(messages)
-    assert.NoError(t, err)
-    assert.NotEmpty(t, response)
+    if err != nil {
+        return "", err
+    }
+
+    // 提案の検出と処理
+    detector := NewProposalDetector()
+    if proposal, err := detector.ExtractProposal(response); err != nil {
+        return "", err
+    } else if proposal != nil {
+        if err := handleProposal(proposal); err != nil {
+            return "", err
+        }
+    }
+
+    return response, nil
 }
 ```
 
-### 7.2 統合テスト
+### 3. 提案処理
+
 ```go
-func TestEndToEnd(t *testing.T) {
-    cmd := exec.Command("roo",
-        "-command", "chat",
-        "-input", `[{"role":"user","content":"Hello"}]`)
-    
-    output, err := cmd.CombinedOutput()
-    assert.NoError(t, err)
-    
-    var response Response
-    assert.NoError(t, json.Unmarshal(output, &response))
-    assert.True(t, response.Success)
+// internal/chat/handler.go
+func handleProposal(proposal *CodeProposal) error {
+    // 1. 提案内容の表示
+    fmt.Printf("提案内容：\n%s\n", proposal.Description)
+    fmt.Printf("対象ファイル：%s\n", proposal.FilePath)
+    fmt.Printf("変更内容：\n%s\n", proposal.Diff)
+
+    // 2. ユーザー承認の取得
+    if !getUserApproval() {
+        return nil
+    }
+
+    // 3. 変更の適用
+    return applyChanges(proposal)
 }
+```
+
+## エラーハンドリング
+
+```go
+// internal/chat/errors.go
+type ProposalError struct {
+    Phase   string // 検出、表示、適用
+    Message string
+    Err     error
+}
+
+var (
+    ErrInvalidFormat    = errors.New("不正な提案フォーマット")
+    ErrFileNotFound     = errors.New("対象ファイルが見つかりません")
+    ErrApplyFailed      = errors.New("変更の適用に失敗しました")
+)
+```
+
+## テスト戦略
+
+### 1. プロンプトテスト
+
+```go
+func TestProposalDetection(t *testing.T) {
+    cases := []struct {
+        name     string
+        response string
+        want     bool
+    }{
+        {
+            name:     "提案を含むレスポンス",
+            response: "---PROPOSAL---\n説明\n---FILE---\npath\n---DIFF---\n差分\n---END---",
+            want:     true,
+        },
+        {
+            name:     "通常のレスポンス",
+            response: "はい、その実装で問題ありません。",
+            want:     false,
+        },
+    }
+    // テスト実装
+}
+```
+
+### 2. 統合テスト
+
+```go
+func TestChatWithProposal(t *testing.T) {
+    // 1. モックAIクライアントの設定
+    // 2. チャット実行
+    // 3. 提案検出の確認
+    // 4. 変更適用の確認
+}
+```
+
+## 利点
+
+1. 信頼性
+- 明確な構造による確実な提案検出
+- パース処理の簡素化
+- エラーの少ない実装
+
+2. 保守性
+- シンプルなコード構造
+- 理解しやすい処理フロー
+- テストの容易さ
+
+3. 拡張性
+- 新しい提案形式の追加が容易
+- プロンプトの柔軟な調整
+- 処理フローのカスタマイズ
+
+## 制限事項
+
+1. プロンプトの依存性
+- AIモデルの応答品質に依存
+- プロンプトの継続的な改善が必要
+
+2. エラー処理
+- 不完全なレスポンス形式への対応
+- ファイル操作の失敗への対応
+
+## 今後の展開
+
+1. プロンプトの最適化
+- より正確な提案生成
+- コンテキストの活用
+- エラー検出の改善
+
+2. ユーザーインターフェース
+- リッチな差分表示
+- インタラクティブな編集
+- 提案履歴の管理
