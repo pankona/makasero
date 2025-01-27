@@ -3,82 +3,63 @@
 ## 1. 概要
 
 ### 1.1 目的
-Roo Code Vimプラグインの最小機能セットとして、以下を実装します：
+Roo CLIツールの最小機能セットとして、以下を実装します：
+- コードの説明機能
 - インタラクティブなチャット機能
-- ファイルコンテキストを利用した質問応答機能
+- JSON形式での入出力
 
 ### 1.2 機能範囲
-- チャットインターフェース
-- ファイル内容の読み取りと解析
-- AIによる応答生成
-- 会話の継続性の維持
+- コマンドラインインターフェース
+- OpenAI APIとの通信
+- 結果のJSON形式での出力
+- エラーハンドリング
 
-## 2. ユーザーインターフェース
+## 2. コマンドラインインターフェース
 
 ### 2.1 基本コマンド
-```vim
-" チャットの開始
-:RooChat              " 通常のチャットを開始
-:RooChatFile {file}   " ファイルについてのチャットを開始
-:RooAddFile {file}    " 現在のチャットにファイルを追加
+```bash
+# コードの説明
+roo -command explain -input "fmt.Println('Hello')"
+
+# チャット機能
+roo -command chat -input '[{"role":"user","content":"Hello"}]'
 ```
 
-### 2.2 チャットバッファのレイアウト
-```
-+------------------------------------------+
-|  Roo Chat                              x  |
-|------------------------------------------+
-| System: Code mode                         |
-| Current context: example.py               |
-|------------------------------------------+
-| User: Please explain this file           |
-|                                          |
-| Assistant: This file contains a class    |
-| that implements...                       |
-|                                          |
-| User: What is the purpose of the         |
-| calculate method?                        |
-|                                          |
-| [Type your message below]                |
-| ---------------------------------------- |
-| >                                        |
-+------------------------------------------+
+### 2.2 出力フォーマット
+```json
+{
+  "success": true,
+  "data": "応答内容",
+  "error": null
+}
 ```
 
-### 2.3 キーマッピング
-```vim
-" デフォルトマッピング
-nnoremap <leader>rc :RooChat<CR>        " チャット開始
-nnoremap <leader>rf :RooChatFile %<CR>  " 現在のファイルについてチャット
-
-" チャットバッファ内
-i, a      " 入力開始
-<CR>      " メッセージ送信
-<C-c>     " 入力キャンセル
-q         " チャットを閉じる
+### 2.3 エラー出力
+```json
+{
+  "success": false,
+  "data": null,
+  "error": "エラーメッセージ"
+}
 ```
 
 ## 3. 技術実装
 
-### 3.1 Vimプラグイン構造
+### 3.1 プロジェクト構造
 ```
-autoload/roo/
-├── chat.vim    " チャット機能のコア
-├── buffer.vim  " バッファ管理
-├── api.vim     " API通信
-└── ui.vim      " UI表示
+cmd/roo/
+├── main.go       # エントリーポイント
+└── main_test.go  # メインのテスト
+
+internal/
+├── api/          # API通信
+│   ├── client.go
+│   └── client_test.go
+└── models/       # データモデル
+    └── api.go
 ```
 
-### 3.2 Goバックエンド構造
-```
-cmd/roo-helper/
-├── main.go     " エントリーポイント
-├── api/        " API通信
-├── models/     " データモデル
-└── vim/        " Vim連携
-```
-
-### 3.3 データモデル
+### 3.2 データモデル
 ```go
 // チャットメッセージ
 type ChatMessage struct {
@@ -86,113 +67,109 @@ type ChatMessage struct {
     Content string `json:"content"`
 }
 
-// ファイルコンテキスト
-type FileContext struct {
-    Path     string `json:"path"`
-    Content  string `json:"content"`
-    FileType string `json:"filetype"`
+// APIレスポンス
+type Response struct {
+    Success bool        `json:"success"`
+    Data    interface{} `json:"data,omitempty"`
+    Error   string      `json:"error,omitempty"`
 }
 
 // チャットリクエスト
 type ChatRequest struct {
-    Message   string        `json:"message"`
-    Context   []FileContext `json:"context"`
-    History   []ChatMessage `json:"history"`
+    Model    string        `json:"model"`
+    Messages []ChatMessage `json:"messages"`
 }
 ```
 
 ## 4. 実装フロー
 
 ### 4.1 フェーズ1: 基本構造（2-3日）
-1. Goバックエンド
-   - OpenAI API通信
-   - 基本的なプロンプト処理
-   - エラーハンドリング
+1. プロジェクト設定
+   - ディレクトリ構造
+   - 依存関係管理
+   - ビルドスクリプト
 
-2. Vimプラグイン基礎
-   - チャットバッファ作成
-   - 基本的なUI表示
-   - キーマッピング
+2. APIクライアント
+   - OpenAI API通信
+   - エラーハンドリング
+   - タイムアウト設定
 
 ### 4.2 フェーズ2: コア機能（2-3日）
-1. ファイルコンテキスト
-   - ファイル読み込み
-   - コンテキスト管理
-   - プロンプト構築
+1. コマンド実装
+   - explainコマンド
+   - chatコマンド
+   - 引数処理
 
-2. チャット機能
-   - メッセージ送受信
-   - 履歴管理
-   - 非同期処理
+2. 出力処理
+   - JSON形式の出力
+   - エラー出力
+   - ログ出力
 
-### 4.3 フェーズ3: UI/UX改善（1-2日）
-1. 表示の改善
-   - シンタックスハイライト
-   - スクロール処理
-   - ステータス表示
+### 4.3 フェーズ3: 品質向上（1-2日）
+1. テスト実装
+   - ユニットテスト
+   - 統合テスト
+   - カバレッジ改善
 
-2. 操作性の向上
-   - エラーメッセージの改善
-   - コマンド補完
-   - ヘルプドキュメント
+2. ドキュメント
+   - README
+   - 使用例
+   - エラーメッセージ
 
 ## 5. テスト計画
 
 ### 5.1 ユニットテスト
-```vim
-" Vim側のテスト
-function! Test_chat_buffer_creation() abort
-    " バッファ作成のテスト
-endfunction
-
-function! Test_file_context() abort
-    " ファイルコンテキストのテスト
-endfunction
-```
-
 ```go
-// Go側のテスト
-func TestChatRequest(t *testing.T) {
-    // リクエスト処理のテスト
+func TestExecuteCommand(t *testing.T) {
+    // コマンド実行のテスト
+    tests := []struct {
+        name    string
+        command string
+        input   string
+        want    interface{}
+        wantErr bool
+    }{
+        // テストケース
+    }
+    // ...
 }
 
-func TestPromptBuilder(t *testing.T) {
-    // プロンプト構築のテスト
+func TestCreateChatCompletion(t *testing.T) {
+    // API通信のテスト
 }
 ```
 
 ### 5.2 統合テスト
-- Vim-Go間の通信テスト
-- エンドツーエンドのシナリオテスト
-- エラーケースのテスト
+- コマンドライン引数の処理
+- APIリクエスト/レスポンス
+- エラーケース
 
 ## 6. 成功基準
 
 ### 6.1 機能要件
-- チャットバッファが正しく動作する
-- ファイルの内容が正しく解析される
-- AIの応答が適切に表示される
-- 会話の文脈が維持される
+- すべてのコマンドが正常に動作
+- 適切なJSON形式での出力
+- エラーの適切な処理と報告
 
 ### 6.2 非機能要件
-- レスポンス時間が1秒以内
+- レスポンス時間が3秒以内
 - メモリ使用が適切
-- エラーが適切に処理される
+- クロスプラットフォーム対応
 
 ### 6.3 品質基準
 - テストカバレッジ80%以上
-- エラーメッセージが明確
-- ドキュメントが完備
+- リントエラーなし
+- ドキュメント完備
 
 ## 7. 将来の拡張性
 
 ### 7.1 追加予定の機能
-1. モードシステム
-2. コマンド実行機能
-3. ブラウザ操作機能
-4. MCPサーバー連携
+1. 追加のサブコマンド
+2. ストリーミングレスポンス
+3. 設定ファイルのサポート
+4. 高度なプロンプト管理
 
 ### 7.2 設計上の考慮点
-- 機能の段階的な追加が容易
+- 新しいコマンドの追加が容易
+- API抽象化による柔軟性
 - 設定のカスタマイズ性
-- プラグインAPIの提供

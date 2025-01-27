@@ -2,250 +2,146 @@
 
 ## 全体構造
 
-プラグインは以下の主要コンポーネントで構成されます：
+CLIツールは以下の主要コンポーネントで構成されます：
 
 ```
 hello-vim-plugin-2/
-├── plugin/
-│   └── roo.vim          # プラグインのエントリーポイント
-├── autoload/
+├── cmd/
 │   └── roo/
-│       ├── mode.vim     # モード管理
-│       ├── api.vim      # AI API通信
-│       ├── file.vim     # ファイル操作
-│       ├── command.vim  # コマンド実行
-│       ├── browser.vim  # ブラウザ操作
-│       ├── mcp.vim      # MCPサーバー連携
-│       ├── task.vim     # タスク管理
-│       ├── config.vim   # 設定管理
-│       └── ui.vim       # UI管理
-└── doc/
-    └── roo.txt          # ヘルプドキュメント
+│       ├── main.go        # CLIのエントリーポイント
+│       └── main_test.go   # メインパッケージのテスト
+├── internal/
+│   ├── api/
+│   │   ├── client.go      # OpenAI API クライアント
+│   │   └── client_test.go # APIクライアントのテスト
+│   └── models/
+│       └── api.go         # データモデル定義
+├── docs/
+│   ├── USAGE.md          # 使用方法ドキュメント
+│   └── ...               # その他のドキュメント
+└── Makefile              # ビルドスクリプト
 ```
 
 ## コンポーネントの役割
 
 ### 1. コア機能
 
-#### mode.vim
-- モードの状態管理
-- モード切り替え処理
-- アクセス制御の実装
-- カスタムモードの管理
+#### cmd/roo/main.go
+- CLIのエントリーポイント
+- コマンドライン引数の処理
+- サブコマンドの実装（explain, chat）
+- エラーハンドリング
 
-```vim
-" モードの定義
-let s:modes = {
-  \ 'code': {
-    \ 'name': 'Code',
-    \ 'groups': ['read', 'edit', 'browser', 'command', 'mcp']
-  \ },
-  \ 'architect': {
-    \ 'name': 'Architect',
-    \ 'groups': ['read', 'edit_md', 'browser', 'mcp']
-  \ },
-  \ 'ask': {
-    \ 'name': 'Ask',
-    \ 'groups': ['read', 'edit_md', 'browser', 'mcp']
-  \ }
-\ }
-
-" 現在のモード管理
-let s:current_mode = 'code'
+```go
+// コマンドの実行
+func executeCommand(client APIClient, command, input string) (interface{}, error) {
+    switch command {
+    case "explain":
+        return executeExplain(client, input)
+    case "chat":
+        return executeChat(client, input)
+    default:
+        return nil, fmt.Errorf("unknown command: %s", command)
+    }
+}
 ```
 
-#### api.vim
-- AI APIとの通信処理
-- プロンプト管理
-- レスポンスのパース
-- ストリーミング処理
+#### internal/api/client.go
+- OpenAI APIとの通信処理
+- リクエスト/レスポンスの処理
+- エラーハンドリング
+- タイムアウト管理
 
-```vim
-" API設定
-let s:api_config = {
-  \ 'endpoint': '',
-  \ 'model': '',
-  \ 'api_key': ''
-\ }
+```go
+// APIクライアント
+type Client struct {
+    httpClient *http.Client
+    apiKey     string
+    baseURL    string
+}
 
-" APIリクエスト処理
-function! roo#api#request(prompt) abort
-  " 非同期リクエスト処理
-endfunction
+// チャット完了リクエスト
+func (c *Client) CreateChatCompletion(messages []models.ChatMessage) (string, error) {
+    // APIリクエストの処理
+}
 ```
 
-#### file.vim
-- ファイル読み書き
-- 差分適用
-- ファイル検索
-- パス解決
+#### internal/models/api.go
+- データ構造の定義
+- JSONシリアライズ/デシリアライズ
+- バリデーション
 
-```vim
-" ファイル操作関数
-function! roo#file#read(path) abort
-endfunction
+```go
+// チャットメッセージモデル
+type ChatMessage struct {
+    Role    string `json:"role"`
+    Content string `json:"content"`
+}
 
-function! roo#file#write(path, content) abort
-endfunction
-
-function! roo#file#apply_diff(path, diff) abort
-endfunction
-```
-
-### 2. 拡張機能
-
-#### command.vim
-- コマンド実行の管理
-- 出力のキャプチャ
-- 非同期実行制御
-
-```vim
-" コマンド実行管理
-function! roo#command#execute(cmd) abort
-  " 非同期コマンド実行
-endfunction
-
-function! roo#command#capture_output() abort
-  " 出力キャプチャ
-endfunction
-```
-
-#### browser.vim
-- ブラウザ制御
-- スクリーンショット
-- アクション実行
-
-```vim
-" ブラウザ操作
-function! roo#browser#launch(url) abort
-endfunction
-
-function! roo#browser#execute_action(action, params) abort
-endfunction
-```
-
-#### mcp.vim
-- MCPサーバーとの通信
-- ツール/リソース管理
-- カスタムツール対応
-
-```vim
-" MCPサーバー連携
-function! roo#mcp#connect(server) abort
-endfunction
-
-function! roo#mcp#execute_tool(tool, params) abort
-endfunction
-```
-
-### 3. 補助機能
-
-#### task.vim
-- タスク状態管理
-- 履歴保存/復元
-- 中断/再開処理
-
-```vim
-" タスク管理
-function! roo#task#start(task) abort
-endfunction
-
-function! roo#task#save_history() abort
-endfunction
-
-function! roo#task#resume(task_id) abort
-endfunction
-```
-
-#### config.vim
-- 設定ファイル管理
-- デフォルト値設定
-- 設定の検証
-
-```vim
-" 設定管理
-function! roo#config#load() abort
-endfunction
-
-function! roo#config#validate() abort
-endfunction
-```
-
-#### ui.vim
-- 出力バッファ管理
-- プログレス表示
-- エラー表示
-
-```vim
-" UI管理
-function! roo#ui#show_output(content) abort
-endfunction
-
-function! roo#ui#show_error(message) abort
-endfunction
+// レスポンス構造
+type Response struct {
+    Success bool        `json:"success"`
+    Data    interface{} `json:"data,omitempty"`
+    Error   string      `json:"error,omitempty"`
+}
 ```
 
 ## データフロー
 
-1. ユーザーインタラクション
+1. コマンド実行フロー
 ```
-User Input -> mode.vim -> api.vim -> UI更新
-```
-
-2. ファイル操作
-```
-file.vim -> mode.vim（権限チェック） -> 実行 -> UI更新
+User Input -> CLI引数解析 -> コマンド実行 -> APIリクエスト -> JSON応答
 ```
 
-3. タスク実行
+2. エラー処理フロー
 ```
-task.vim -> api.vim -> 各種ツール実行 -> 結果収集 -> UI更新
+エラー発生 -> エラーラッピング -> JSON形式でエラー返却
 ```
 
 ## エラー処理
 
-- 各コンポーネントで適切なエラーハンドリング
-- エラーメッセージの一元管理
-- ユーザーフレンドリーなエラー表示
-- リカバリー処理の実装
+- 各レイヤーでの適切なエラーハンドリング
+- エラーのラッピングとコンテキスト追加
+- ユーザーフレンドリーなエラーメッセージ
+- 詳細なエラーログ
 
 ## 設定システム
 
-```vim
-" デフォルト設定
-let g:roo_default_config = {
-  \ 'api_key': '',
-  \ 'model': 'gpt-4',
-  \ 'default_mode': 'code',
-  \ 'history_file': expand('~/.vim/roo_history.json'),
-  \ 'log_level': 'info'
-\ }
+```go
+const (
+    defaultTimeout = 30 * time.Second
+    defaultBaseURL = "https://api.openai.com/v1"
+)
+
+// 環境変数による設定
+// OPENAI_API_KEY: API認証キー
 ```
 
 ## 拡張性
 
-- カスタムモードの追加
-- 新しいツールの統合
-- MCPサーバーの拡張
-- カスタムUIの実装
+- 新しいサブコマンドの追加
+- 異なるAIモデルのサポート
+- カスタムプロンプトの実装
+- 出力フォーマットの拡張
 
 ## テスト戦略
 
 1. ユニットテスト
 - 各コンポーネントの独立したテスト
-- モック/スタブの活用
+- モックの活用（APIクライアント等）
+- テーブル駆動テスト
 
 2. 統合テスト
-- コンポーネント間の連携テスト
-- エンドツーエンドのシナリオテスト
+- コマンド実行の結合テスト
+- APIリクエスト/レスポンスのテスト
 
 3. 自動テスト
-- CIでの自動テスト実行
-- カバレッジ計測
+- GitHub Actionsでの自動テスト
+- カバレッジレポート生成
 
 ## パフォーマンス考慮事項
 
-- 非同期処理の活用
-- キャッシュの適切な利用
-- メモリ使用量の最適化
-- 大きなファイルの効率的な処理
+- タイムアウト設定の最適化
+- 効率的なメモリ使用
+- 大きな入力の適切な処理
+- レスポンスのストリーミング対応
