@@ -17,6 +17,11 @@ const (
 	defaultBaseURL = "https://api.openai.com/v1"
 )
 
+// APIClient はAPIクライアントのインターフェースを定義します
+type APIClient interface {
+	CreateChatCompletion(messages []models.ChatMessage) (string, error)
+}
+
 // Client represents an API client for making requests
 type Client struct {
 	httpClient *http.Client

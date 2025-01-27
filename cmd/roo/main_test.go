@@ -126,6 +126,7 @@ func TestExecuteCommand(t *testing.T) {
 		name     string
 		command  string
 		input    string
+		mode     string
 		response string
 		err      error
 		want     interface{}
@@ -135,6 +136,7 @@ func TestExecuteCommand(t *testing.T) {
 			name:     "正常系：explainコマンド",
 			command:  "explain",
 			input:    "fmt.Println('Hello')",
+			mode:     "",
 			response: "This code prints 'Hello'",
 			err:      nil,
 			want:     "This code prints 'Hello'",
@@ -144,6 +146,7 @@ func TestExecuteCommand(t *testing.T) {
 			name:     "正常系：chatコマンド",
 			command:  "chat",
 			input:    `[{"role":"user","content":"Hello"}]`,
+			mode:     "",
 			response: "Hi there!",
 			err:      nil,
 			want:     "Hi there!",
@@ -153,6 +156,17 @@ func TestExecuteCommand(t *testing.T) {
 			name:     "異常系：不明なコマンド",
 			command:  "unknown",
 			input:    "",
+			mode:     "",
+			response: "",
+			err:      nil,
+			want:     nil,
+			wantErr:  true,
+		},
+		{
+			name:     "異常系：proposeコマンド（モックでは実行不可）",
+			command:  "propose",
+			input:    "test.go",
+			mode:     "patch",
 			response: "",
 			err:      nil,
 			want:     nil,
@@ -167,7 +181,7 @@ func TestExecuteCommand(t *testing.T) {
 				err:      tt.err,
 			}
 
-			got, err := executeCommand(client, tt.command, tt.input)
+			got, err := executeCommand(client, tt.command, tt.input, tt.mode)
 
 			if tt.wantErr {
 				assert.Error(t, err)

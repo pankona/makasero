@@ -33,6 +33,22 @@ sed -n '/^func Execute/,/^}/p' main.go | ./bin/roo -command explain -input "$(ca
 ]'
 ```
 
+### コード提案（propose）
+
+1. パッチモードでの提案：
+```bash
+# 既存のコードに対して部分的な変更を提案
+./bin/roo -command propose -input "path/to/file.go" -mode patch
+```
+
+2. 全体書き換えモードでの提案：
+```bash
+# コード全体の書き換えを提案
+./bin/roo -command propose -input "path/to/file.go" -mode full
+```
+
+提案された変更は、差分形式で表示され、ユーザーの承認を得てから適用されます。
+
 ## 応用例
 
 ### ソースコードの解析
@@ -70,6 +86,15 @@ git diff origin/main...HEAD | ./bin/roo -command chat -input '[
 ]'
 ```
 
+3. コードの改善提案：
+```bash
+# 特定のファイルに対して改善提案を生成
+./bin/roo -command propose -input "main.go" -mode patch
+
+# ディレクトリ内の全てのGoファイルに対して改善提案を生成
+find . -name "*.go" -exec ./bin/roo -command propose -input {} -mode patch \;
+```
+
 ## Tips
 
 ### 出力のフォーマット
@@ -88,9 +113,12 @@ git diff origin/main...HEAD | ./bin/roo -command chat -input '[
 alias explain='./bin/roo -command explain -input'
 # チャット
 alias chat='./bin/roo -command chat -input'
+# コード提案
+alias propose='./bin/roo -command propose -input'
 ```
 
 使用例：
 ```bash
 explain "$(cat main.go)"
 chat '[{"role":"user","content":"Goのインターフェースについて説明してください"}]'
+propose "main.go" -mode patch
