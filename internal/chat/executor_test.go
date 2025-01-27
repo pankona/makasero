@@ -2,7 +2,9 @@ package chat
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/detector"
@@ -170,6 +172,90 @@ func TestNewExecutor(t *testing.T) {
 			}
 			if !tt.wantErr && executor == nil {
 				t.Error("NewExecutor() returned nil executor")
+			}
+		})
+	}
+}
+
+func TestCreatePrompt(t *testing.T) {
+	// テスト用の一時ディレクトリを作成
+	tempDir, err := os.MkdirTemp("", "prompt-test-*")
+	if err != nil {
+		t.Fatalf("一時ディレクトリの作成に失敗: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// テストファイルの作成
+	testFilePath := filepath.Join(tempDir, "test.go")
+	testContent := `package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	fmt.Print("Enter your message: ")
+	var input string
+	_, err := fmt.Scanf("%s\n", &input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Your message: %s\n", input)
+}
+`
+	if err := os.WriteFile(testFilePath, []byte(testContent), 0644); err != nil {
+		t.Fatalf("テストファイルの作成に失敗: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		input       string
+		filePath    string
+		wantErr     bool
+		wantContent string
+	}{
+		{
+			name:        "ファイルパスなし",
+			input:       "コードを改善してください",
+			filePath:    "",
+			wantErr:     false,
+			wantContent: "コードを改善してください",
+		},
+		{
+			name:     "存在しないファイル",
+			input:    "コードを改善してください",
+			filePath: filepath.Join(tempDir, "nonexistent.go"),
+			wantErr:  true,
+		},
+		{
+			name:     "正常系：ファイルあり（エラーハンドリングの改善要求）",
+			input:    "このコードを改善してください。特にエラーハンドリングの部分を見直してください。",
+			filePath: testFilePath,
+			wantErr:  false,
+			wantContent: fmt.Sprintf("このコードを改善してください。特にエラーハンドリングの部分を見直してください。\n\n対象ファイル: %s\n\nコード：\n```go\n%s\n```",
+				testFilePath, testContent),
+		},
+		{
+			name:     "正常系：ファイルあり（一般的な改善要求）",
+			input:    "このコードをよりGo言語のベストプラクティスに沿うように改善してください。",
+			filePath: testFilePath,
+			wantErr:  false,
+			wantContent: fmt.Sprintf("このコードをよりGo言語のベストプラクティスに沿うように改善してください。\n\n対象ファイル: %s\n\nコード：\n```go\n%s\n```",
+				testFilePath, testContent),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := createPrompt(tt.input, tt.filePath)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("createPrompt() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.wantContent {
+				t.Errorf("createPrompt() = %v, want %v", got, tt.wantContent)
 			}
 		})
 	}

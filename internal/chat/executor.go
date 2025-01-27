@@ -58,10 +58,11 @@ func NewExecutor(client ChatClient, backupDir string) (*Executor, error) {
 // Execute はチャットを実行し、必要に応じて提案を処理します。
 func (e *Executor) Execute(input string, targetFile string) (string, error) {
 	// 1. メッセージの準備
-	content := input
-	if targetFile != "" {
-		content = fmt.Sprintf("対象ファイル: %s\n\n%s", targetFile, input)
+	content, err := createPrompt(input, targetFile)
+	if err != nil {
+		return "", fmt.Errorf("プロンプトの作成に失敗しました: %w", err)
 	}
+	fmt.Printf("DEBUG: 生成されたプロンプト:\n%s\n", content)
 
 	messages := []Message{
 		{
@@ -93,4 +94,29 @@ func (e *Executor) Execute(input string, targetFile string) (string, error) {
 	}
 
 	return response, nil
+}
+
+// createPrompt は、入力とファイルパスからプロンプトを作成します。
+func createPrompt(input, filePath string) (string, error) {
+	if filePath == "" {
+		return input, nil
+	}
+
+	// ファイルの存在確認
+	fmt.Printf("DEBUG: 対象ファイル: %s\n", filePath)
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return "", fmt.Errorf("ファイルが存在しません: %s", filePath)
+	}
+	fmt.Printf("DEBUG: ファイルの存在を確認\n")
+
+	// ファイルの読み取り
+	fileContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("ファイルの読み取りに失敗しました: %w", err)
+	}
+
+	// プロンプトの作成
+	prompt := fmt.Sprintf("%s\n\n対象ファイル: %s\n\nコード：\n```go\n%s\n```", input, filePath, string(fileContent))
+	fmt.Printf("DEBUG: ファイルの内容:\n%s\n", string(fileContent))
+	return prompt, nil
 }

@@ -1,15 +1,12 @@
 package main
 
 import (
-	"bufio"
-	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
+	kingpin "github.com/alecthomas/kingpin/v2"
 	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/api"
 	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat"
 	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/models"
@@ -20,60 +17,39 @@ type APIClient interface {
 	CreateChatCompletion(messages []models.ChatMessage) (string, error)
 }
 
+var (
+	app = kingpin.New("roo", "A code improvement assistant")
+
+	// chatコマンド
+	chatCmd    = app.Command("chat", "Chat with the assistant")
+	chatInput  = chatCmd.Arg("input", "Input text for the chat").Required().String()
+	chatFile   = chatCmd.Flag("file", "Target file path for patch proposals").String()
+	chatBackup = chatCmd.Flag("backup-dir", "Directory for backup files").String()
+
+	// explainコマンド
+	explainCmd  = app.Command("explain", "Get code explanation")
+	explainCode = explainCmd.Arg("code", "Code to explain").Required().String()
+)
+
 func main() {
-	// コマンドライン引数の設定
-	var (
-		input     = flag.String("input", "", "Input text for the chat")
-		file      = flag.String("file", "", "Target file path for patch proposals")
-		backupDir = flag.String("backup-dir", "", "Directory for backup files")
-	)
-	flag.Parse()
-
-	// 位置引数からコマンドを取得
-	args := flag.Args()
-	if len(args) < 1 {
-		log.Fatal("command is required (chat or explain)")
-	}
-	command := args[0]
-
-	// 入力テキストの取得（標準入力、位置引数、または-input）
-	inputText := *input
-	if inputText == "" && len(args) > 1 {
-		inputText = args[1]
-	}
-
-	// 標準入力があれば、それを読み取る
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		reader := bufio.NewReader(os.Stdin)
-		var sb strings.Builder
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				log.Fatalf("標準入力の読み取りに失敗: %v", err)
-			}
-			sb.WriteString(line)
-		}
-		if sb.Len() > 0 {
-			if inputText != "" {
-				inputText = fmt.Sprintf("%s\n\n%s", inputText, sb.String())
-			} else {
-				inputText = sb.String()
-			}
-		}
-	}
+	// コマンドライン引数のパース
+	command := kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	// APIクライアントの初期化
 	client, err := api.NewClient()
 	if err != nil {
 		log.Fatalf("Failed to initialize API client: %v", err)
 	}
+
 	// コマンドの実行
-	result, err := executeCommand(client, command, inputText, *file, *backupDir)
-	result, err = executeCommand(client, command, inputText, *file, *backupDir)
+	var result string
+	switch command {
+	case chatCmd.FullCommand():
+		result, err = executeChat(client, *chatInput, *chatFile, *chatBackup)
+	case explainCmd.FullCommand():
+		result, err = executeExplain(client, *explainCode)
+	}
+
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
@@ -126,19 +102,7 @@ func executeChat(client APIClient, input, targetFile, backupDir string) (string,
 	if err != nil {
 		return "", fmt.Errorf("failed to initialize chat executor: %w", err)
 	}
-	// ファイルの内容を読み取る（ファイルパスが指定されている場合）
-	var content string
-	if targetFile != "" {
-		fileContent, err := os.ReadFile(targetFile)
-		if err != nil {
-			return "", fmt.Errorf("ファイルの読み取りに失敗しました: %w", err)
-		}
-		content = fmt.Sprintf("以下のファイルの内容を改善してください:\n\n%s\n\n%s", targetFile, string(fileContent))
-	} else {
-		content = input
-	}
 
 	// チャットの実行
-	return executor.Execute(content, targetFile)
-	return executor.Execute(input)
+	return executor.Execute(input, targetFile)
 }
