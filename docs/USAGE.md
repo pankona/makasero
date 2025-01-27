@@ -6,102 +6,96 @@
 
 1. 直接コードを指定する場合：
 ```bash
-./bin/roo -command explain -input "fmt.Println('Hello, World!')"
+./bin/roo explain "fmt.Println('Hello, World!')"
 ```
 
 2. ファイルからコードを抽出して説明する場合：
 ```bash
 # 特定の関数を抽出して説明
-sed -n '/^func executeChat/,/^}/p' cmd/roo/main.go | ./bin/roo -command explain -input "$(cat)"
+sed -n '/^func executeChat/,/^}/p' cmd/roo/main.go | ./bin/roo explain "$(cat)"
 
 # 複数の関数を一度に抽出して説明
-sed -n '/^func Execute/,/^}/p' main.go | ./bin/roo -command explain -input "$(cat)"
+sed -n '/^func Execute/,/^}/p' main.go | ./bin/roo explain "$(cat)"
 ```
 
 ### チャット（chat）
 
-1. 単一のメッセージ：
+1. 単純な質問：
 ```bash
-./bin/roo -command chat -input '[{"role":"user","content":"こんにちは"}]'
+./bin/roo chat "Goの並行処理について教えてください"
 ```
 
-2. 複数のメッセージを含む会話：
+2. コードの改善提案：
 ```bash
-./bin/roo -command chat -input '[
-  {"role":"system","content":"あなたはプログラミングの先生です"},
-  {"role":"user","content":"Goの並行処理について教えてください"}
-]'
+# ファイルの内容を渡して改善提案を要求
+cat path/to/file.go | ./bin/roo chat "このコードを改善してください"
+
+# 特定の要件での改善を要求
+cat main.go | ./bin/roo chat "このコードを以下の要件で改善してください：
+1. エラーハンドリングの追加
+2. ログ出力の実装
+3. テストのしやすさの向上"
 ```
 
-### コード提案（propose）
-
-1. パッチモードでの提案：
+3. パイプラインでの使用：
 ```bash
-# 既存のコードに対して部分的な変更を提案
-./bin/roo -command propose -input "path/to/file.go" -mode patch
-```
+# grepで特定のパターンを抽出して改善
+grep -r "TODO" . | ./bin/roo chat "これらのTODOに対する実装案を提案してください"
 
-2. 全体書き換えモードでの提案：
-```bash
-# コード全体の書き換えを提案
-./bin/roo -command propose -input "path/to/file.go" -mode full
+# gitの差分を説明
+git diff | ./bin/roo chat "この変更内容をレビューしてください"
 ```
-
-提案された変更は、差分形式で表示され、ユーザーの承認を得てから適用されます。
 
 ## 応用例
 
-### ソースコードの解析
-
-1. 特定のパターンにマッチする関数を検索して説明：
-```bash
-# mainで始まる関数を検索して説明
-grep -A 10 "^func main" main.go | ./bin/roo -command explain -input "$(cat)"
-```
-
-2. 複数ファイルから関数を検索して説明：
-```bash
-# 全てのGoファイルからExecuteで始まる関数を検索
-find . -name "*.go" -exec sh -c 'echo "=== {} ==="; sed -n "/^func Execute/,/^}/p" {}' \; | \
-./bin/roo -command explain -input "$(cat)"
-```
-
 ### コードレビュー支援
 
-1. gitの差分を説明：
+1. ファイルの改善提案：
 ```bash
-# 特定のコミットの変更内容を説明
-git show <commit-hash> | ./bin/roo -command explain -input "$(cat)"
+# 単一ファイルの改善
+cat main.go | ./bin/roo chat "このコードをより良いGoの慣習に従うように改善してください"
 
-# 作業中の変更内容を説明
-git diff | ./bin/roo -command explain -input "$(cat)"
+# 複数ファイルの改善
+find . -name "*.go" -exec sh -c 'echo "=== {} ==="; cat {}' \; | \
+./bin/roo chat "これらのファイルのコーディング規約違反を指摘し、修正案を提示してください"
 ```
 
-2. PRのレビューコメント生成：
+2. PRのレビュー支援：
 ```bash
-# PRの差分を説明してレビューコメントを生成
-git diff origin/main...HEAD | ./bin/roo -command chat -input '[
-  {"role":"system","content":"あなたはコードレビュアーです。以下の差分に対するレビューコメントを生成してください。"},
-  {"role":"user","content":"'"$(cat)"'"}
-]'
+# PRの差分をレビュー
+git diff origin/main...HEAD | ./bin/roo chat "この変更に対するレビューコメントを生成してください。
+以下の点に注目してください：
+1. コーディング規約への準拠
+2. パフォーマンスへの影響
+3. セキュリティの考慮"
 ```
 
-3. コードの改善提案：
-```bash
-# 特定のファイルに対して改善提案を生成
-./bin/roo -command propose -input "main.go" -mode patch
+### バッチ処理での使用
 
-# ディレクトリ内の全てのGoファイルに対して改善提案を生成
-find . -name "*.go" -exec ./bin/roo -command propose -input {} -mode patch \;
+1. 大規模なリファクタリング：
+```bash
+# 特定のパターンを含むファイルを検索して改善提案を生成
+find . -type f -name "*.go" -exec grep -l "deprecated" {} \; | \
+while read file; do
+  echo "=== $file ==="
+  cat "$file" | ./bin/roo chat "このファイルの非推奨APIの使用を最新のAPIに更新してください"
+done
+```
+
+2. ドキュメント生成：
+```bash
+# 関数のドキュメントを生成
+find . -name "*.go" -exec sh -c 'echo "=== {} ==="; cat {}' \; | \
+./bin/roo chat "これらの関数に対するGoDocコメントを生成してください"
 ```
 
 ## Tips
 
-### 出力のフォーマット
+### バックアップディレクトリの指定
 
-- jqを使用してJSON出力を整形：
+コードの変更を適用する際のバックアップ先を指定できます：
 ```bash
-./bin/roo -command explain -input "fmt.Println('Hello')" | jq .data
+./bin/roo chat --backup-dir=/path/to/backup "コードを改善してください"
 ```
 
 ### エイリアスの設定
@@ -110,15 +104,63 @@ find . -name "*.go" -exec ./bin/roo -command propose -input {} -mode patch \;
 
 ```bash
 # コードの説明
-alias explain='./bin/roo -command explain -input'
-# チャット
-alias chat='./bin/roo -command chat -input'
-# コード提案
-alias propose='./bin/roo -command propose -input'
+alias explain='./bin/roo explain'
+# チャットと改善提案
+alias chat='./bin/roo chat'
 ```
 
 使用例：
 ```bash
 explain "$(cat main.go)"
-chat '[{"role":"user","content":"Goのインターフェースについて説明してください"}]'
-propose "main.go" -mode patch
+cat main.go | chat "このコードを改善してください"
+```
+
+### 実行例
+
+1. 基本的な改善提案：
+```bash
+$ cat main.go | ./bin/roo chat "このコードを改善してください"
+提案内容：
+エラーハンドリングを改善し、ログ出力を追加します。
+
+対象ファイル：main.go
+変更内容：
+@@ -10,6 +10,7 @@
+ func main() {
+-    result := process()
++    result, err := process()
++    if err != nil {
++        log.Printf("処理エラー: %v", err)
++        return fmt.Errorf("実行エラー: %w", err)
++    }
+     return nil
+ }
+
+この提案を適用しますか？ [y/N]:
+```
+
+2. 特定の要件での改善：
+```bash
+$ cat sample.go | ./bin/roo chat "ユーザー入力の処理を改善してください"
+提案内容：
+入力のバリデーションとエラーハンドリングを追加します。
+
+対象ファイル：sample.go
+変更内容：
+@@ -5,7 +5,12 @@
+ func main() {
+     var input string
+-    fmt.Scanln(&input)
++    fmt.Print("Enter value: ")
++    if _, err := fmt.Scanln(&input); err != nil {
++        fmt.Fprintf(os.Stderr, "入力エラー: %v\n", err)
++        os.Exit(1)
++    }
++    if input == "" {
++        fmt.Fprintln(os.Stderr, "入力が必要です")
++        os.Exit(1)
++    }
+     fmt.Printf("入力値: %s\n", input)
+ }
+
+この提案を適用しますか？ [y/N]:

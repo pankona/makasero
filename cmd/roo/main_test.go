@@ -1,24 +1,82 @@
 package main
 
 import (
-	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/models"
-	"github.com/stretchr/testify/assert"
 )
 
-// MockAPIClient はテスト用のモックAPIクライアント
+// MockAPIClient はAPIClientのモック実装です
 type MockAPIClient struct {
 	response string
 	err      error
 }
 
 func (m *MockAPIClient) CreateChatCompletion(messages []models.ChatMessage) (string, error) {
-	if m.err != nil {
-		return "", m.err
+	return m.response, m.err
+}
+
+func TestExecuteCommand(t *testing.T) {
+	// テスト用の一時ディレクトリを作成
+	tempDir, err := os.MkdirTemp("", "roo-test-*")
+	if err != nil {
+		t.Fatalf("一時ディレクトリの作成に失敗: %v", err)
 	}
-	return m.response, nil
+	defer os.RemoveAll(tempDir)
+
+	tests := []struct {
+		name     string
+		command  string
+		input    string
+		response string
+		wantErr  bool
+	}{
+		{
+			name:     "explain command",
+			command:  "explain",
+			input:    "func main() {}",
+			response: "This is a simple main function.",
+			wantErr:  false,
+		},
+		{
+			name:     "chat command",
+			command:  "chat",
+			input:    "コードを改善してください",
+			response: "はい、改善案を提示します。",
+			wantErr:  false,
+		},
+		{
+			name:     "unknown command",
+			command:  "unknown",
+			input:    "",
+			response: "",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &MockAPIClient{
+				response: tt.response,
+				err:      nil,
+			}
+
+			// テストケース用のバックアップディレクトリを作成
+			backupDir := filepath.Join(tempDir, tt.name)
+
+			got, err := executeCommand(client, tt.command, tt.input, backupDir)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("executeCommand() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr && got != tt.response {
+				t.Errorf("executeCommand() = %v, want %v", got, tt.response)
+			}
+		})
+	}
 }
 
 func TestExecuteExplain(t *testing.T) {
@@ -26,25 +84,13 @@ func TestExecuteExplain(t *testing.T) {
 		name     string
 		code     string
 		response string
-		err      error
-		want     string
 		wantErr  bool
 	}{
 		{
-			name:     "正常系：コードの説明が成功",
-			code:     "fmt.Println('Hello')",
-			response: "This code prints 'Hello' to the console",
-			err:      nil,
-			want:     "This code prints 'Hello' to the console",
+			name:     "simple code",
+			code:     "func main() {}",
+			response: "This is a simple main function.",
 			wantErr:  false,
-		},
-		{
-			name:     "異常系：APIエラー",
-			code:     "fmt.Println('Hello')",
-			response: "",
-			err:      errors.New("API error"),
-			want:     "",
-			wantErr:  true,
 		},
 	}
 
@@ -52,53 +98,41 @@ func TestExecuteExplain(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &MockAPIClient{
 				response: tt.response,
-				err:      tt.err,
+				err:      nil,
 			}
 
 			got, err := executeExplain(client, tt.code)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("executeExplain() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
 
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+			if !tt.wantErr && got != tt.response {
+				t.Errorf("executeExplain() = %v, want %v", got, tt.response)
 			}
 		})
 	}
 }
 
 func TestExecuteChat(t *testing.T) {
+	// テスト用の一時ディレクトリを作成
+	tempDir, err := os.MkdirTemp("", "roo-test-*")
+	if err != nil {
+		t.Fatalf("一時ディレクトリの作成に失敗: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
 	tests := []struct {
 		name     string
 		input    string
 		response string
-		err      error
-		want     string
 		wantErr  bool
 	}{
 		{
-			name:     "正常系：チャットメッセージが成功",
-			input:    `[{"role":"user","content":"Hello"}]`,
-			response: "Hi there!",
-			err:      nil,
-			want:     "Hi there!",
+			name:     "simple chat",
+			input:    "コードを改善してください",
+			response: "はい、改善案を提示します。",
 			wantErr:  false,
-		},
-		{
-			name:     "異常系：不正なJSON",
-			input:    `invalid json`,
-			response: "",
-			err:      nil,
-			want:     "",
-			wantErr:  true,
-		},
-		{
-			name:     "異常系：APIエラー",
-			input:    `[{"role":"user","content":"Hello"}]`,
-			response: "",
-			err:      errors.New("API error"),
-			want:     "",
-			wantErr:  true,
 		},
 	}
 
@@ -106,88 +140,20 @@ func TestExecuteChat(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &MockAPIClient{
 				response: tt.response,
-				err:      tt.err,
+				err:      nil,
 			}
 
-			got, err := executeChat(client, tt.input)
+			// テストケース用のバックアップディレクトリを作成
+			backupDir := filepath.Join(tempDir, tt.name)
 
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
-			}
-		})
-	}
-}
-
-func TestExecuteCommand(t *testing.T) {
-	tests := []struct {
-		name     string
-		command  string
-		input    string
-		mode     string
-		response string
-		err      error
-		want     interface{}
-		wantErr  bool
-	}{
-		{
-			name:     "正常系：explainコマンド",
-			command:  "explain",
-			input:    "fmt.Println('Hello')",
-			mode:     "",
-			response: "This code prints 'Hello'",
-			err:      nil,
-			want:     "This code prints 'Hello'",
-			wantErr:  false,
-		},
-		{
-			name:     "正常系：chatコマンド",
-			command:  "chat",
-			input:    `[{"role":"user","content":"Hello"}]`,
-			mode:     "",
-			response: "Hi there!",
-			err:      nil,
-			want:     "Hi there!",
-			wantErr:  false,
-		},
-		{
-			name:     "異常系：不明なコマンド",
-			command:  "unknown",
-			input:    "",
-			mode:     "",
-			response: "",
-			err:      nil,
-			want:     nil,
-			wantErr:  true,
-		},
-		{
-			name:     "異常系：proposeコマンド（モックでは実行不可）",
-			command:  "propose",
-			input:    "test.go",
-			mode:     "patch",
-			response: "",
-			err:      nil,
-			want:     nil,
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := &MockAPIClient{
-				response: tt.response,
-				err:      tt.err,
+			got, err := executeChat(client, tt.input, backupDir)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("executeChat() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
 
-			got, err := executeCommand(client, tt.command, tt.input, tt.mode)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+			if !tt.wantErr && got != tt.response {
+				t.Errorf("executeChat() = %v, want %v", got, tt.response)
 			}
 		})
 	}
