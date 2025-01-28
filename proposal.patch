@@ -1,5 +1,5 @@
---- cmd/roo/main.go.orig
-+++ cmd/roo/main.go
+--- cmd/makasero/main.go.orig
++++ cmd/makasero/main.go
 @@ -57,7 +57,7 @@
  // executeCommand executes the specified command with the given input
 +// executeCommandは指定したコマンドを与えられた入力で実行します
