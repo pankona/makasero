@@ -1,0 +1,17 @@
+--- /dev/null
++++ /dev/null
+@@ -57,3 +57,3 @@
+ 
+-// executeCommand executes the specified command with the given input
++// executeCommandは指定されたコマンドを与えられた入力で実行します
+ func executeCommand(client APIClient, command, input, targetFile, backupDir string) (string, error) {
+@@ -69,3 +69,3 @@
+ 
+-// executeExplain handles the explain command
++// executeExplainはexplainコマンドを処理します
+ func executeExplain(client APIClient, code string) (string, error) {
+@@ -85,3 +85,3 @@
+ 
+-// executeChat handles the chat command
++// executeChatはchatコマンドを処理します
+ 

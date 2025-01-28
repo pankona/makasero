@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/models"
+	"github.com/pankona/makasero/internal/models"
 )
 
 // MockAPIClient はAPIClientのモック実装です
@@ -20,7 +20,7 @@ func (m *MockAPIClient) CreateChatCompletion(messages []models.ChatMessage) (str
 
 func TestExecuteCommand(t *testing.T) {
 	// テスト用の一時ディレクトリを作成
-	tempDir, err := os.MkdirTemp("", "roo-test-*")
+	tempDir, err := os.MkdirTemp("", "makasero-test-*")
 	if err != nil {
 		t.Fatalf("一時ディレクトリの作成に失敗: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestExecuteExplain(t *testing.T) {
 
 func TestExecuteChat(t *testing.T) {
 	// テスト用の一時ディレクトリを作成
-	tempDir, err := os.MkdirTemp("", "roo-test-*")
+	tempDir, err := os.MkdirTemp("", "makasero-test-*")
 	if err != nil {
 		t.Fatalf("一時ディレクトリの作成に失敗: %v", err)
 	}

@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/detector"
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/handler"
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/prompts"
+	"github.com/pankona/makasero/internal/chat/detector"
+	"github.com/pankona/makasero/internal/chat/handler"
+	"github.com/pankona/makasero/internal/chat/prompts"
 )
 
 // Message はチャットメッセージを表現する構造体です。
@@ -36,7 +36,7 @@ func NewExecutor(client ChatClient, backupDir string) (*Executor, error) {
 		if err != nil {
 			return nil, fmt.Errorf("ホームディレクトリの取得に失敗しました: %w", err)
 		}
-		backupDir = filepath.Join(homeDir, ".roo", "backups")
+		backupDir = filepath.Join(homeDir, ".makasero", "backups")
 	}
 
 	// 各コンポーネントの初期化

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/api"
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/models"
+	"github.com/pankona/makasero/internal/api"
+	"github.com/pankona/makasero/internal/models"
 )
 
 // ApplyMode は提案の適用モードを表します

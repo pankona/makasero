@@ -3,7 +3,7 @@ package detector
 import (
 	"strings"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/prompts"
+	"github.com/pankona/makasero/internal/chat/prompts"
 )
 
 // ProposalDetector は、AIの応答から提案を検出し抽出する機能を提供します。

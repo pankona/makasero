@@ -3,7 +3,7 @@ package handler
 import (
 	"fmt"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/detector"
+	"github.com/pankona/makasero/internal/chat/detector"
 )
 
 // Approver は、提案の承認を行うインターフェースです。

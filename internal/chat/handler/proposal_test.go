@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/detector"
+	"github.com/pankona/makasero/internal/chat/detector"
 )
 
 // モックApprover

@@ -1,4 +1,4 @@
-module github.com/rooveterinaryinc/hello-vim-plugin-2
+module github.com/pankona/makasero
 
 go 1.21
 

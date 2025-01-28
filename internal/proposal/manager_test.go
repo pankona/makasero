@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/models"
+	"github.com/pankona/makasero/internal/models"
 	"github.com/stretchr/testify/assert"
 )
 

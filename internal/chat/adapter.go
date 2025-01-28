@@ -1,7 +1,7 @@
 package chat
 
 import (
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/models"
+	"github.com/pankona/makasero/internal/models"
 )
 
 // APIClientAdapter は、api.Clientをchat.ChatClientインターフェースに適合させるアダプターです。

@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/detector"
+	"github.com/pankona/makasero/internal/chat/detector"
 )
 
 // ConsoleApprover は、コンソールを通じてユーザーから承認を取得する実装です。

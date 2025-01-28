@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/detector"
+	"github.com/pankona/makasero/internal/chat/detector"
 )
 
 // FileApplier は、ファイルへの変更を適用する実装です。

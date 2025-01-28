@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/detector"
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat/handler"
+	"github.com/pankona/makasero/internal/chat/detector"
+	"github.com/pankona/makasero/internal/chat/handler"
 )
 
 // モックチャットクライアント
@@ -50,7 +50,7 @@ func newTestHandler(approved bool, approverErr, applierErr error) *handler.Propo
 
 func TestExecutor_Execute(t *testing.T) {
 	// テスト用の一時ディレクトリを作成
-	tempDir, err := os.MkdirTemp("", "roo-test-*")
+	tempDir, err := os.MkdirTemp("", "makasero-test-*")
 	if err != nil {
 		t.Fatalf("一時ディレクトリの作成に失敗: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestNewExecutor(t *testing.T) {
 
 func TestCreatePrompt(t *testing.T) {
 	// テスト用の一時ディレクトリを作成
-	tempDir, err := os.MkdirTemp("", "prompt-test-*")
+	tempDir, err := os.MkdirTemp("", "makasero-test-*")
 	if err != nil {
 		t.Fatalf("一時ディレクトリの作成に失敗: %v", err)
 	}

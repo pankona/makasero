@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 
 	kingpin "github.com/alecthomas/kingpin/v2"
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/api"
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/chat"
-	"github.com/rooveterinaryinc/hello-vim-plugin-2/internal/models"
+	"github.com/pankona/makasero/internal/api"
+	"github.com/pankona/makasero/internal/chat"
+	"github.com/pankona/makasero/internal/models"
 )
 
 // APIClient はAPIとの対話を行うインターフェースです。
@@ -18,7 +18,7 @@ type APIClient interface {
 }
 
 var (
-	app = kingpin.New("roo", "A code improvement assistant")
+	app = kingpin.New("makasero", "A code improvement assistant")
 
 	// chatコマンド
 	chatCmd    = app.Command("chat", "Chat with the assistant")
@@ -93,7 +93,7 @@ func executeChat(client APIClient, input, targetFile, backupDir string) (string,
 		if err != nil {
 			return "", fmt.Errorf("failed to get home directory: %w", err)
 		}
-		backupDir = filepath.Join(homeDir, ".roo", "backups")
+		backupDir = filepath.Join(homeDir, ".makasero", "backups")
 	}
 
 	// アダプターを使用してチャット実行器を初期化
