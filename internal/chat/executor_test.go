@@ -122,6 +122,16 @@ test.go
 		},
 	}
 
+	// テストファイルの作成
+	testFilePath := filepath.Join(tempDir, "test.go")
+	testContent := `package main
+
+func main() {}
+`
+	if err := os.WriteFile(testFilePath, []byte(testContent), 0644); err != nil {
+		t.Fatalf("テストファイルの作成に失敗: %v", err)
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// カスタムExecutorの作成
@@ -131,7 +141,13 @@ test.go
 				handler:  newTestHandler(tt.approved, nil, nil),
 			}
 
-			response, err := executor.Execute(tt.input, tt.targetFile)
+			// テストケースのtargetFileを一時ディレクトリ内のファイルに更新
+			targetFile := tt.targetFile
+			if targetFile == "test.go" {
+				targetFile = testFilePath
+			}
+
+			response, err := executor.Execute(tt.input, targetFile)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
 				return

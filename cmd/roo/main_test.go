@@ -31,6 +31,7 @@ func TestExecuteCommand(t *testing.T) {
 		command    string
 		input      string
 		targetFile string
+		setup      func(t *testing.T, tempDir string) string // テスト前処理用関数
 		response   string
 		wantErr    bool
 	}{
@@ -47,8 +48,15 @@ func TestExecuteCommand(t *testing.T) {
 			command:    "chat",
 			input:      "コードを改善してください",
 			targetFile: "test.go",
-			response:   "はい、改善案を提示します。",
-			wantErr:    false,
+			setup: func(t *testing.T, tempDir string) string {
+				testFile := filepath.Join(tempDir, "test.go")
+				if err := os.WriteFile(testFile, []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
+					t.Fatalf("一時ファイルの作成に失敗: %v", err)
+				}
+				return testFile
+			},
+			response: "はい、改善案を提示します。",
+			wantErr:  false,
 		},
 		{
 			name:       "unknown command",
@@ -70,7 +78,13 @@ func TestExecuteCommand(t *testing.T) {
 			// テストケース用のバックアップディレクトリを作成
 			backupDir := filepath.Join(tempDir, tt.name)
 
-			got, err := executeCommand(client, tt.command, tt.input, tt.targetFile, backupDir)
+			targetFile := tt.targetFile
+			if tt.setup != nil {
+				if tt.setup != nil {
+					targetFile = tt.setup(t, tempDir)
+				}
+			}
+			got, err := executeCommand(client, tt.command, tt.input, targetFile, backupDir)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("executeCommand() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -130,6 +144,7 @@ func TestExecuteChat(t *testing.T) {
 		name       string
 		input      string
 		targetFile string
+		setup      func(t *testing.T, tempDir string) string // テスト前処理用関数
 		response   string
 		wantErr    bool
 	}{
@@ -137,8 +152,15 @@ func TestExecuteChat(t *testing.T) {
 			name:       "simple chat",
 			input:      "コードを改善してください",
 			targetFile: "test.go",
-			response:   "はい、改善案を提示します。",
-			wantErr:    false,
+			setup: func(t *testing.T, tempDir string) string {
+				testFile := filepath.Join(tempDir, "test.go")
+				if err := os.WriteFile(testFile, []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
+					t.Fatalf("一時ファイルの作成に失敗: %v", err)
+				}
+				return testFile
+			},
+			response: "はい、改善案を提示します。",
+			wantErr:  false,
 		},
 	}
 
@@ -152,7 +174,11 @@ func TestExecuteChat(t *testing.T) {
 			// テストケース用のバックアップディレクトリを作成
 			backupDir := filepath.Join(tempDir, tt.name)
 
-			got, err := executeChat(client, tt.input, tt.targetFile, backupDir)
+			targetFile := tt.targetFile
+			if tt.setup != nil {
+				targetFile = tt.setup(t, tempDir)
+			}
+			got, err := executeChat(client, tt.input, targetFile, backupDir)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("executeChat() error = %v, wantErr %v", err, tt.wantErr)
 				return
