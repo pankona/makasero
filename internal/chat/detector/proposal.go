@@ -56,7 +56,7 @@ func (d *ProposalDetector) Extract(response string) (*Proposal, error) {
 	}
 
 	// コードブロックのマーカーを削除
-	diff = cleanCodeBlock(diff)
+	diff = CleanCodeBlock(diff)
 
 	return &Proposal{
 		Description: strings.TrimSpace(description),
@@ -81,8 +81,8 @@ func extractSection(text, startMarker, endMarker string) string {
 	return text[start : start+end]
 }
 
-// cleanCodeBlock は、コードブロックのマーカー（```）を削除します。
-func cleanCodeBlock(text string) string {
+// CleanCodeBlock は、コードブロックのマーカー（```）を削除します。
+func CleanCodeBlock(text string) string {
 	text = strings.TrimSpace(text)
 	if strings.HasPrefix(text, "```") {
 		if idx := strings.Index(text[3:], "```"); idx != -1 {

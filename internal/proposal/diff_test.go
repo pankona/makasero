@@ -152,3 +152,131 @@ func TestDiffUtility_FormatDiff(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchReplaceDiffStrategy_ApplyDiff(t *testing.T) {
+	tests := []struct {
+		name           string
+		original       string
+		searchContent  string
+		replaceContent string
+		startLine      int
+		endLine        int
+		fuzzyThreshold float64
+		wantError      bool
+		errorType      string
+		want           string
+	}{
+		{
+			name: "正常系：完全一致での置換",
+			original: `func hello() {
+    fmt.Println("Hello")
+}`,
+			searchContent:  `    fmt.Println("Hello")`,
+			replaceContent: `    fmt.Println("Hello, World!")`,
+			startLine:      2,
+			endLine:        2,
+			fuzzyThreshold: 1.0,
+			wantError:      false,
+			want: `func hello() {
+    fmt.Println("Hello, World!")
+}`,
+		},
+		{
+			name: "異常系：類似度不足",
+			original: `func hello() {
+    fmt.Printf("Hello")
+}`,
+			searchContent:  `    fmt.Println("Hello")`,
+			replaceContent: `    fmt.Println("Hello, World!")`,
+			startLine:      2,
+			endLine:        2,
+			fuzzyThreshold: 1.0,
+			wantError:      true,
+			errorType:      "DiffError",
+		},
+		{
+			name: "異常系：行範囲外",
+			original: `func hello() {
+    fmt.Println("Hello")
+}`,
+			searchContent:  `    fmt.Println("Hello")`,
+			replaceContent: `    fmt.Println("Hello, World!")`,
+			startLine:      5,
+			endLine:        5,
+			fuzzyThreshold: 1.0,
+			wantError:      true,
+			errorType:      "DiffError",
+		},
+		{
+			name: "異常系：空の検索内容",
+			original: `func hello() {
+    fmt.Println("Hello")
+}`,
+			searchContent:  ``,
+			replaceContent: `    fmt.Println("Hello, World!")`,
+			startLine:      0,
+			endLine:        0,
+			fuzzyThreshold: 1.0,
+			wantError:      true,
+			errorType:      "DiffError",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewSearchReplaceDiffStrategy(tt.fuzzyThreshold, DefaultBufferLines)
+			result, err := s.ApplyDiff(tt.original, tt.searchContent, tt.replaceContent, tt.startLine, tt.endLine)
+
+			if tt.wantError {
+				assert.Error(t, err)
+				if tt.errorType != "" {
+					assert.IsType(t, &DiffError{}, err)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.want, result)
+			}
+		})
+	}
+}
+
+func TestGetSimilarity(t *testing.T) {
+	tests := []struct {
+		name     string
+		original string
+		search   string
+		want     float64
+	}{
+		{
+			name:     "完全一致",
+			original: "Hello World",
+			search:   "Hello World",
+			want:     1.0,
+		},
+		{
+			name:     "空の検索文字列",
+			original: "Hello World",
+			search:   "",
+			want:     1.0,
+		},
+		{
+			name:     "部分一致",
+			original: "Hello World",
+			search:   "Hello",
+			want:     0.5,
+		},
+		{
+			name:     "空白の違いを無視",
+			original: "Hello    World",
+			search:   "Hello World",
+			want:     1.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			similarity := getSimilarity(tt.original, tt.search)
+			assert.InDelta(t, tt.want, similarity, 0.1)
+		})
+	}
+}

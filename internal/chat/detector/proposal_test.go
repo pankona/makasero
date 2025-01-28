@@ -60,6 +60,72 @@ func TestProposalDetector_Extract(t *testing.T) {
 		wantProposal *Proposal
 	}{
 		{
+			name: "コードブロック付きの提案",
+			response: `---PROPOSAL---
+エラーハンドリングを改善します。
+---FILE---
+internal/api/client.go
+---DIFF---
+` + "```go" + `
+@@ -10,6 +10,7 @@
+func (c *Client) Execute() error {
+-    result := process()
++    result, err := process()
++    if err != nil {
++        return fmt.Errorf("実行エラー: %w", err)
++    }
+    return nil
+}
+` + "```" + `
+---END---`,
+			wantErr: false,
+			wantNil: false,
+			wantProposal: &Proposal{
+				Description: "エラーハンドリングを改善します。",
+				FilePath:    "internal/api/client.go",
+				Diff: `@@ -10,6 +10,7 @@
+func (c *Client) Execute() error {
+-    result := process()
++    result, err := process()
++    if err != nil {
++        return fmt.Errorf("実行エラー: %w", err)
++    }
+    return nil
+}`,
+			},
+		},
+		{
+			name: "複数の提案から最初の提案のみ抽出",
+			response: `---PROPOSAL---
+最初の提案です。
+---FILE---
+first.go
+---DIFF---
+@@ -1,1 +1,1 @@
+-old
++new
+---END---
+
+---PROPOSAL---
+二番目の提案です。
+---FILE---
+second.go
+---DIFF---
+@@ -1,1 +1,1 @@
+-foo
++bar
+---END---`,
+			wantErr: false,
+			wantNil: false,
+			wantProposal: &Proposal{
+				Description: "最初の提案です。",
+				FilePath:    "first.go",
+				Diff: `@@ -1,1 +1,1 @@
+-old
++new`,
+			},
+		},
+		{
 			name: "正常な提案",
 			response: `---PROPOSAL---
 エラーハンドリングを改善します。
@@ -139,6 +205,48 @@ internal/api/client.go
 				if got.Diff != tt.wantProposal.Diff {
 					t.Errorf("Extract() Diff = %v, want %v", got.Diff, tt.wantProposal.Diff)
 				}
+			}
+		})
+	}
+}
+
+func TestCleanCodeBlock(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{
+			name: "言語指定付きコードブロック",
+			text: "```go\npackage main\n\nfunc main() {}\n```",
+			want: "package main\n\nfunc main() {}",
+		},
+		{
+			name: "言語指定なしコードブロック",
+			text: "```\nsome code\n```",
+			want: "some code",
+		},
+		{
+			name: "コードブロックなし",
+			text: "plain text",
+			want: "plain text",
+		},
+		{
+			name: "空のコードブロック",
+			text: "```\n```",
+			want: "",
+		},
+		{
+			name: "前後に空白があるコードブロック",
+			text: "  ```go\n  code\n  ```  ",
+			want: "code",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CleanCodeBlock(tt.text); got != tt.want {
+				t.Errorf("CleanCodeBlock() = %q, want %q", got, tt.want)
 			}
 		})
 	}

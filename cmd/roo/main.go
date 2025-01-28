@@ -57,7 +57,7 @@ func main() {
 	fmt.Println(result)
 }
 
-// executeCommand executes the specified command with the given input
+// executeCommandは指定されたコマンドを与えられた入力で実行します
 func executeCommand(client APIClient, command, input, targetFile, backupDir string) (string, error) {
 	switch command {
 	case "explain":
@@ -69,7 +69,7 @@ func executeCommand(client APIClient, command, input, targetFile, backupDir stri
 	}
 }
 
-// executeExplain handles the explain command
+// executeExplainはexplainコマンドを処理します
 func executeExplain(client APIClient, code string) (string, error) {
 	messages := []models.ChatMessage{
 		{
@@ -85,7 +85,7 @@ func executeExplain(client APIClient, code string) (string, error) {
 	return client.CreateChatCompletion(messages)
 }
 
-// executeChat handles the chat command
+// executeChatはchatコマンドを処理します
 func executeChat(client APIClient, input, targetFile, backupDir string) (string, error) {
 	// バックアップディレクトリの設定
 	if backupDir == "" {
