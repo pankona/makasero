@@ -5,7 +5,7 @@
 CLIツールは以下の主要コンポーネントで構成されます：
 
 ```
-hello-vim-plugin-2/
+makasero/
 ├── cmd/
 │   └── makasero/
 │       ├── main.go        # CLIのエントリーポイント

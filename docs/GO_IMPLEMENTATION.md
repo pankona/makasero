@@ -4,7 +4,7 @@
 
 ### 1.1 構成
 ```
-hello-vim-plugin-2/
+makasero/
 ├── cmd/
 │   └── makasero/
 │       ├── main.go      # CLIエントリーポイント
