@@ -23,7 +23,7 @@ type ProposalHandler interface {
 
 ### 1. executeChat の改善
 ```go
-// cmd/roo/main.go の変更
+// cmd/makasero/main.go の変更
 func executeChat(client APIClient, input string) (string, error) {
     response, err := client.CreateChatCompletion(messages)
     if err != nil {
@@ -77,7 +77,7 @@ func applyChanges(proposal *CodeProposal) error {
 
 ### 1. コマンドラインオプションの変更
 ```go
-// cmd/roo/main.go
+// cmd/makasero/main.go
 func main() {
     // propose コマンドの削除
     // chat コマンドのオプション追加
@@ -88,7 +88,7 @@ func main() {
 ### 2. ヘルプメッセージの更新
 ```go
 const helpText = `
-Usage: roo [command] [options]
+Usage: makasero [command] [options]
 
 Commands:
   chat     AIとチャットし、コード改善提案を受け取る
@@ -114,7 +114,7 @@ func TestProposalDetection(t *testing.T) {
 
 ### 2. 統合テストの更新
 ```go
-// cmd/roo/main_test.go
+// cmd/makasero/main_test.go
 func TestChatWithProposal(t *testing.T) {
     // エンドツーエンドのテスト
     // 実際のファイル操作を含むテスト

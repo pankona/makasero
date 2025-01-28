@@ -3,7 +3,7 @@
 ## 1. 概要
 
 ### 1.1 目的
-Roo CLIツールの最小機能セットとして、以下を実装します：
+Makasero CLIツールの最小機能セットとして、以下を実装します：
 - コードの説明機能
 - インタラクティブなチャット機能
 - コード提案と適用機能
@@ -22,13 +22,13 @@ Roo CLIツールの最小機能セットとして、以下を実装します：
 ### 2.1 基本コマンド
 ```bash
 # コードの説明
-roo -command explain -input "fmt.Println('Hello')"
+makasero -command explain -input "fmt.Println('Hello')"
 
 # チャット機能
-roo -command chat -input '[{"role":"user","content":"Hello"}]'
+makasero -command chat -input '[{"role":"user","content":"Hello"}]'
 
 # コード提案
-roo -command propose -input "path/to/file.go" -mode "patch"  # または "full"
+makasero -command propose -input "path/to/file.go" -mode "patch"  # または "full"
 ```
 
 ### 2.2 出力フォーマット
@@ -66,7 +66,7 @@ roo -command propose -input "path/to/file.go" -mode "patch"  # または "full"
 
 ### 3.1 プロジェクト構造
 ```
-cmd/roo/
+cmd/makasero/
 ├── main.go       # エントリーポイント
 └── main_test.go  # メインのテスト
 

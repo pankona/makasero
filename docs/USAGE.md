@@ -1,4 +1,4 @@
-# Roo CLI使用例
+# Makasero CLI使用例
 
 ## 基本的な使い方
 
@@ -6,32 +6,32 @@
 
 1. 直接コードを指定する場合：
 ```bash
-./bin/roo explain "fmt.Println('Hello, World!')"
+./bin/makasero explain "fmt.Println('Hello, World!')"
 ```
 
 2. ファイルからコードを抽出して説明する場合：
 ```bash
 # 特定の関数を抽出して説明
-sed -n '/^func executeChat/,/^}/p' cmd/roo/main.go | ./bin/roo explain "$(cat)"
+sed -n '/^func executeChat/,/^}/p' cmd/makasero/main.go | ./bin/makasero explain "$(cat)"
 
 # 複数の関数を一度に抽出して説明
-sed -n '/^func Execute/,/^}/p' main.go | ./bin/roo explain "$(cat)"
+sed -n '/^func Execute/,/^}/p' main.go | ./bin/makasero explain "$(cat)"
 ```
 
 ### チャット（chat）
 
 1. 単純な質問：
 ```bash
-./bin/roo chat "Goの並行処理について教えてください"
+./bin/makasero chat "Goの並行処理について教えてください"
 ```
 
 2. コードの改善提案：
 ```bash
 # ファイルの内容を渡して改善提案を要求
-cat path/to/file.go | ./bin/roo chat "このコードを改善してください"
+cat path/to/file.go | ./bin/makasero chat "このコードを改善してください"
 
 # 特定の要件での改善を要求
-cat main.go | ./bin/roo chat "このコードを以下の要件で改善してください：
+cat main.go | ./bin/makasero chat "このコードを以下の要件で改善してください：
 1. エラーハンドリングの追加
 2. ログ出力の実装
 3. テストのしやすさの向上"
@@ -40,10 +40,10 @@ cat main.go | ./bin/roo chat "このコードを以下の要件で改善して�
 3. パイプラインでの使用：
 ```bash
 # grepで特定のパターンを抽出して改善
-grep -r "TODO" . | ./bin/roo chat "これらのTODOに対する実装案を提案してください"
+grep -r "TODO" . | ./bin/makasero chat "これらのTODOに対する実装案を提案してください"
 
 # gitの差分を説明
-git diff | ./bin/roo chat "この変更内容をレビューしてください"
+git diff | ./bin/makasero chat "この変更内容をレビューしてください"
 ```
 
 ## 応用例
@@ -53,17 +53,17 @@ git diff | ./bin/roo chat "この変更内容をレビューしてください"
 1. ファイルの改善提案：
 ```bash
 # 単一ファイルの改善
-cat main.go | ./bin/roo chat "このコードをより良いGoの慣習に従うように改善してください"
+cat main.go | ./bin/makasero chat "このコードをより良いGoの慣習に従うように改善してください"
 
 # 複数ファイルの改善
 find . -name "*.go" -exec sh -c 'echo "=== {} ==="; cat {}' \; | \
-./bin/roo chat "これらのファイルのコーディング規約違反を指摘し、修正案を提示してください"
+./bin/makasero chat "これらのファイルのコーディング規約違反を指摘し、修正案を提示してください"
 ```
 
 2. PRのレビュー支援：
 ```bash
 # PRの差分をレビュー
-git diff origin/main...HEAD | ./bin/roo chat "この変更に対するレビューコメントを生成してください。
+git diff origin/main...HEAD | ./bin/makasero chat "この変更に対するレビューコメントを生成してください。
 以下の点に注目してください：
 1. コーディング規約への準拠
 2. パフォーマンスへの影響
@@ -78,7 +78,7 @@ git diff origin/main...HEAD | ./bin/roo chat "この変更に対するレビュ�
 find . -type f -name "*.go" -exec grep -l "deprecated" {} \; | \
 while read file; do
   echo "=== $file ==="
-  cat "$file" | ./bin/roo chat "このファイルの非推奨APIの使用を最新のAPIに更新してください"
+  cat "$file" | ./bin/makasero chat "このファイルの非推奨APIの使用を最新のAPIに更新してください"
 done
 ```
 
@@ -86,7 +86,7 @@ done
 ```bash
 # 関数のドキュメントを生成
 find . -name "*.go" -exec sh -c 'echo "=== {} ==="; cat {}' \; | \
-./bin/roo chat "これらの関数に対するGoDocコメントを生成してください"
+./bin/makasero chat "これらの関数に対するGoDocコメントを生成してください"
 ```
 
 ## Tips
@@ -95,7 +95,7 @@ find . -name "*.go" -exec sh -c 'echo "=== {} ==="; cat {}' \; | \
 
 コードの変更を適用する際のバックアップ先を指定できます：
 ```bash
-./bin/roo chat --backup-dir=/path/to/backup "コードを改善してください"
+./bin/makasero chat --backup-dir=/path/to/backup "コードを改善してください"
 ```
 
 ### エイリアスの設定
@@ -104,9 +104,9 @@ find . -name "*.go" -exec sh -c 'echo "=== {} ==="; cat {}' \; | \
 
 ```bash
 # コードの説明
-alias explain='./bin/roo explain'
+alias explain='./bin/makasero explain'
 # チャットと改善提案
-alias chat='./bin/roo chat'
+alias chat='./bin/makasero chat'
 ```
 
 使用例：
@@ -119,7 +119,7 @@ cat main.go | chat "このコードを改善してください"
 
 1. 基本的な改善提案：
 ```bash
-$ cat main.go | ./bin/roo chat "このコードを改善してください"
+$ cat main.go | ./bin/makasero chat "このコードを改善してください"
 提案内容：
 エラーハンドリングを改善し、ログ出力を追加します。
 
@@ -141,7 +141,7 @@ $ cat main.go | ./bin/roo chat "このコードを改善してください"
 
 2. 特定の要件での改善：
 ```bash
-$ cat sample.go | ./bin/roo chat "ユーザー入力の処理を改善してください"
+$ cat sample.go | ./bin/makasero chat "ユーザー入力の処理を改善してください"
 提案内容：
 入力のバリデーションとエラーハンドリングを追加します。
 

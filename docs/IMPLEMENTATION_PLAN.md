@@ -102,7 +102,7 @@ type FileApplier struct{}
 
 ### チャット実行
 ```go
-// cmd/roo/main.go
+// cmd/makasero/main.go
 func executeChat(client ChatClient, input string) error {
     // 1. システムプロンプトの設定
     messages := []Message{
@@ -169,7 +169,7 @@ func TestProposalDetection(t *testing.T) {
 
 ### 統合テスト
 ```go
-// cmd/roo/main_test.go
+// cmd/makasero/main_test.go
 func TestChatWithProposal(t *testing.T) {
     // エンドツーエンドテスト
     // モックレスポンスの使用

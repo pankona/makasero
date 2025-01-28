@@ -1,13 +1,13 @@
 .PHONY: build test clean install
 
 # ビルド設定
-BINARY_NAME=roo
+BINARY_NAME=makasero
 BUILD_DIR=bin
 
 build:
 	@echo "Building..."
 	@mkdir -p $(BUILD_DIR)
-	@go build -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/roo
+	@go build -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/makasero
 
 test:
 	@echo "Running tests..."
@@ -19,7 +19,7 @@ clean:
 
 install:
 	@echo "Installing..."
-	@go install ./cmd/roo
+	@go install ./cmd/makasero
 
 # デフォルトターゲット
 all: clean build

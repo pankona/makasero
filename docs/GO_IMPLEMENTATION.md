@@ -6,7 +6,7 @@
 ```
 hello-vim-plugin-2/
 ├── cmd/
-│   └── roo/
+│   └── makasero/
 │       ├── main.go      # CLIエントリーポイント
 │       └── main_test.go # メインのテスト
 ├── internal/
@@ -31,7 +31,7 @@ sequenceDiagram
 
 ### 2.1 メインプログラム
 ```go
-// cmd/roo/main.go
+// cmd/makasero/main.go
 package main
 
 import (
@@ -133,11 +133,11 @@ type Response struct {
 ```makefile
 .PHONY: build test clean install
 
-BINARY_NAME=roo
+BINARY_NAME=makasero
 BUILD_DIR=bin
 
 build:
-    go build -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/roo
+    go build -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/makasero
 
 test:
     go test -v ./...
@@ -146,7 +146,7 @@ clean:
     rm -rf $(BUILD_DIR)
 
 install:
-    go install ./cmd/roo
+    go install ./cmd/makasero
 ```
 
 ## 4. Goを選択する利点

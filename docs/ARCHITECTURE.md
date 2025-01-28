@@ -7,7 +7,7 @@ CLIツールは以下の主要コンポーネントで構成されます：
 ```
 hello-vim-plugin-2/
 ├── cmd/
-│   └── roo/
+│   └── makasero/
 │       ├── main.go        # CLIのエントリーポイント
 │       └── main_test.go   # メインパッケージのテスト
 ├── internal/
@@ -29,7 +29,7 @@ hello-vim-plugin-2/
 
 ### 1. コア機能
 
-#### cmd/roo/main.go
+#### cmd/makasero/main.go
 - CLIのエントリーポイント
 - コマンドライン引数の処理
 - サブコマンドの実装（explain, chat, propose）

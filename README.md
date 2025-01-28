@@ -1,6 +1,6 @@
-# Roo CLI
+# Makasero CLI
 
-Roo CLIは、OpenAI GPT-4を活用したコードの説明や対話を行うためのコマンドラインツールです。
+Makasero CLIは、OpenAI GPT-4を活用したコードの説明や対話を行うためのコマンドラインツールです。
 
 ## 機能
 
@@ -10,7 +10,7 @@ Roo CLIは、OpenAI GPT-4を活用したコードの説明や対話を行うた�
 ## インストール
 
 ```bash
-go install github.com/rooveterinaryinc/hello-vim-plugin-2/cmd/roo@latest
+go install github.com/pankona/makasero/cmd/makasero@latest
 ```
 
 ## 使用方法
@@ -24,13 +24,13 @@ export OPENAI_API_KEY="your-api-key"
 ### コードの説明
 
 ```bash
-roo -command explain -input "func hello() { fmt.Println('Hello, World!') }"
+makasero -command explain -input "func hello() { fmt.Println('Hello, World!') }"
 ```
 
 ### チャット
 
 ```bash
-roo -command chat -input '[{"role":"user","content":"Goでの並行処理について説明してください"}]'
+makasero -command chat -input '[{"role":"user","content":"Goでの並行処理について説明してください"}]'
 ```
 
 ## レスポンス形式
