@@ -1,108 +1,105 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	kingpin "github.com/alecthomas/kingpin/v2"
 	"github.com/pankona/makasero/internal/api"
-	"github.com/pankona/makasero/internal/chat"
 	"github.com/pankona/makasero/internal/models"
 )
 
-// APIClient はAPIとの対話を行うインターフェースです。
-type APIClient interface {
-	CreateChatCompletion(messages []models.ChatMessage) (string, error)
-}
-
 var (
-	app = kingpin.New("makasero", "A code improvement assistant")
-
-	// chatコマンド
-	chatCmd    = app.Command("chat", "Chat with the assistant")
-	chatInput  = chatCmd.Arg("input", "Input text for the chat").Required().String()
-	chatFile   = chatCmd.Flag("file", "Target file path for patch proposals").String()
-	chatBackup = chatCmd.Flag("backup-dir", "Directory for backup files").String()
+	app = kingpin.New("makasero", "コード改善支援CLIツール")
 
 	// explainコマンド
-	explainCmd  = app.Command("explain", "Get code explanation")
-	explainCode = explainCmd.Arg("code", "Code to explain").Required().String()
+	explainCmd  = app.Command("explain", "コードの説明を生成")
+	explainCode = explainCmd.Arg("code", "説明するコード").Required().String()
+
+	// chatコマンド
+	chatCmd   = app.Command("chat", "AIとチャット")
+	chatInput = chatCmd.Arg("input", "チャット入力").Required().String()
 )
 
 func main() {
-	// コマンドライン引数のパース
 	command := kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	// APIクライアントの初期化
 	client, err := api.NewClient()
 	if err != nil {
-		log.Fatalf("Failed to initialize API client: %v", err)
+		log.Fatalf("APIクライアントの初期化に失敗: %v", err)
 	}
 
 	// コマンドの実行
 	var result string
 	switch command {
-	case chatCmd.FullCommand():
-		result, err = executeChat(client, *chatInput, *chatFile, *chatBackup)
 	case explainCmd.FullCommand():
-		result, err = executeExplain(client, *explainCode)
+		result, err = executeCommand(client, "explain", *explainCode, "", "")
+	case chatCmd.FullCommand():
+		result, err = executeCommand(client, "chat", *chatInput, "", "")
 	}
 
 	if err != nil {
-		log.Fatalf("Error: %v", err)
+		outputResponse(models.Response{
+			Success: false,
+			Error:   err.Error(),
+		})
+		os.Exit(1)
 	}
 
-	fmt.Println(result)
+	outputResponse(models.Response{
+		Success: true,
+		Data:    result,
+	})
 }
 
-// executeCommandは指定されたコマンドを与えられた入力で実行します
-func executeCommand(client APIClient, command, input, targetFile, backupDir string) (string, error) {
-	switch command {
-	case "explain":
-		return executeExplain(client, input)
-	case "chat":
-		return executeChat(client, input, targetFile, backupDir)
-	default:
-		return "", fmt.Errorf("unknown command: %s", command)
-	}
-}
-
-// executeExplainはexplainコマンドを処理します
-func executeExplain(client APIClient, code string) (string, error) {
+func executeExplain(client api.APIClient, code string) (string, error) {
 	messages := []models.ChatMessage{
 		{
 			Role:    "system",
-			Content: "You are a helpful assistant that explains code.",
+			Content: "あなたはコードの説明を生成する専門家です。",
 		},
 		{
 			Role:    "user",
-			Content: fmt.Sprintf("Please explain this code:\n\n%s", code),
+			Content: fmt.Sprintf("以下のコードを説明してください：\n\n%s", code),
 		},
 	}
 
 	return client.CreateChatCompletion(messages)
 }
 
-// executeChatはchatコマンドを処理します
-func executeChat(client APIClient, input, targetFile, backupDir string) (string, error) {
-	// バックアップディレクトリの設定
-	if backupDir == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory: %w", err)
+func executeChat(client api.APIClient, input string, targetFile string, backupDir string) (string, error) {
+	var messages []models.ChatMessage
+	if err := json.Unmarshal([]byte(input), &messages); err != nil {
+		// JSON形式でない場合は、単純なメッセージとして扱う
+		messages = []models.ChatMessage{
+			{
+				Role:    "user",
+				Content: input,
+			},
 		}
-		backupDir = filepath.Join(homeDir, ".makasero", "backups")
 	}
 
-	// アダプターを使用してチャット実行器を初期化
-	adapter := chat.NewAPIClientAdapter(client)
-	executor, err := chat.NewExecutor(adapter, backupDir)
+	return client.CreateChatCompletion(messages)
+}
+
+func executeCommand(client api.APIClient, command, input, targetFile, backupDir string) (string, error) {
+	switch command {
+	case "explain":
+		return executeExplain(client, input)
+	case "chat":
+		return executeChat(client, input, targetFile, backupDir)
+	default:
+		return "", fmt.Errorf("不明なコマンド: %s", command)
+	}
+}
+
+func outputResponse(response models.Response) {
+	json, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to initialize chat executor: %w", err)
+		log.Fatalf("JSONの生成に失敗: %v", err)
 	}
-
-	// チャットの実行
-	return executor.Execute(input, targetFile)
+	fmt.Println(string(json))
 }
