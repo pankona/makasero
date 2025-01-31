@@ -8,6 +8,7 @@ NC='\033[0m' # No Color
 
 # テスト用の一時ファイル
 TEST_FILE="test/integration/test.go"
+BACKUP_DIR="test/integration/backups"
 
 # テストカウンター
 TESTS_TOTAL=0
@@ -42,6 +43,7 @@ run_test() {
 
 # テスト用のファイルを作成
 mkdir -p test/integration
+mkdir -p "$BACKUP_DIR"
 cat > "$TEST_FILE" << 'EOF'
 package main
 
@@ -69,6 +71,26 @@ run_test "Chat simple" "./bin/makasero chat 'Goのスライスとは何ですか
 
 run_test "Chat JSON" "./bin/makasero chat '[{\"role\":\"system\",\"content\":\"あなたはGoの専門家です\"},{\"role\":\"user\",\"content\":\"Goのインターフェースについて簡単に説明してください\"}]'" 0
 
+# 新機能のテスト
+run_test "Chat with file and auto-approval" "./bin/makasero chat -f $TEST_FILE -y 'コードを改善してください'" 0
+
+run_test "Chat with backup" "./bin/makasero chat -f $TEST_FILE --backup-dir $BACKUP_DIR 'エラーハンドリングを追加してください'" 0
+
+# バックアップファイルの確認
+echo -e "\n${BLUE}Checking backup files...${NC}"
+if [ -d "$BACKUP_DIR" ] && [ "$(ls -A $BACKUP_DIR)" ]; then
+    echo -e "${GREEN}Backup files exist${NC}"
+    ls -l "$BACKUP_DIR"
+else
+    echo -e "${RED}No backup files found${NC}"
+    TESTS_PASSED=$((TESTS_PASSED - 1))
+fi
+
+# エラーケースのテスト
+run_test "Invalid file path" "./bin/makasero chat -f nonexistent.go 'テスト'" 1
+
+run_test "Invalid backup directory" "./bin/makasero chat -f $TEST_FILE --backup-dir /root/invalid 'テスト'" 1
+
 # テスト結果の表示
 echo -e "\n${BLUE}=== Test Results ===${NC}"
 echo "Total tests: $TESTS_TOTAL"
@@ -76,8 +98,9 @@ echo "Passed tests: $TESTS_PASSED"
 echo "Failed tests: $((TESTS_TOTAL - TESTS_PASSED))"
 echo -e "${BLUE}===================${NC}\n"
 
-# テスト用ファイルの削除
+# テスト用ファイルとバックアップの削除
 rm -f "$TEST_FILE"
+rm -rf "$BACKUP_DIR"
 
 # 全てのテストが成功したかどうかを終了ステータスで返す
 [ $TESTS_PASSED -eq $TESTS_TOTAL ] 
