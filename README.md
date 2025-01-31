@@ -4,8 +4,11 @@ Makasero CLIは、OpenAI GPT-4を活用したコードの説明や対話を行�
 
 ## 機能
 
-- コードの説明（explain）: 指定したコードの説明を生成
-- チャット（chat）: GPT-4との対話機能
+- コードの説明（explain）: 指定したコードやファイルの説明を生成
+- インタラクティブチャット（chat）: GPT-4との対話機能
+  - ファイル編集モード: 指定したファイルの改善提案と自動適用
+  - セッション管理: 会話履歴の保存と再開
+  - バックアップ機能: 変更前のファイルを自動保存
 
 ## インストール
 
@@ -23,15 +26,48 @@ export OPENAI_API_KEY="your-api-key"
 
 ### コードの説明
 
+ファイルの説明:
 ```bash
-makasero -command explain -input "func hello() { fmt.Println('Hello, World!') }"
+makasero explain path/to/file.go
+```
+
+コードスニペットの説明:
+```bash
+makasero explain "func hello() { fmt.Println('Hello, World!') }"
 ```
 
 ### チャット
 
+通常のチャット:
 ```bash
-makasero -command chat -input '[{"role":"user","content":"Goでの並行処理について説明してください"}]'
+makasero chat
 ```
+
+ファイル編集モード:
+```bash
+makasero chat -f path/to/file.go
+```
+
+セッション管理:
+```bash
+# セッション一覧の表示
+makasero chat -l
+
+# セッションの再開
+makasero chat -r <session-id>
+```
+
+## 対話コマンド
+
+チャット中で使用できるコマンド:
+- `exit` または `quit`: チャットを終了
+- 通常の入力: AIとの対話
+- コード改善の提案時: 変更の確認と適用（y/N）
+
+## ディレクトリ構造
+
+- `~/.makasero/sessions/`: セッション履歴の保存先
+- `backups/`: ファイル変更時のバックアップ保存先（デフォルト）
 
 ## レスポンス形式
 
