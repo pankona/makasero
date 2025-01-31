@@ -27,6 +27,8 @@ var (
 	chatCmd    = app.Command("chat", "AIとチャット")
 	chatFile   = chatCmd.Flag("file", "対象ファイル").Short('f').String()
 	chatBackup = chatCmd.Flag("backup-dir", "バックアップディレクトリ").Default("backups").String()
+	chatResume = chatCmd.Flag("resume", "過去のセッションを再開").Short('r').String()
+	chatList   = chatCmd.Flag("list", "過去のセッション一覧を表示").Short('l').Bool()
 )
 
 func main() {
@@ -107,18 +109,90 @@ func executeExplain(client api.APIClient, code string) (string, error) {
 func executeChat(client api.APIClient, targetFile string, backupDir string) (string, error) {
 	var messages []models.ChatMessage
 	var fileContent string
+	var session *models.ChatSession
+
+	// セッションディレクトリの設定
+	sessionDir := filepath.Join(os.Getenv("HOME"), ".makasero", "sessions")
+
+	// セッション一覧の表示
+	if *chatList {
+		sessions, err := models.ListSessions(sessionDir)
+		if err != nil {
+			return "", fmt.Errorf("セッション一覧の取得に失敗: %w", err)
+		}
+
+		if len(sessions) == 0 {
+			return "保存されたセッションはありません。", nil
+		}
+
+		fmt.Println("保存されたセッション一覧:")
+		for _, s := range sessions {
+			fmt.Printf("ID: %s\n", s.ID)
+			fmt.Printf("開始時刻: %s\n", s.StartTime.Format("2006-01-02 15:04:05"))
+			if s.FilePath != "" {
+				fmt.Printf("ファイル: %s\n", s.FilePath)
+			}
+
+			// 最新のメッセージを表示（最大3つ）
+			fmt.Println("最新の会話:")
+			messageCount := len(s.Messages)
+			start := messageCount - 6 // 3往復分（ユーザー＋AI）
+			if start < 0 {
+				start = 0
+			}
+			for i := start; i < messageCount; i++ {
+				msg := s.Messages[i]
+				if msg.Role == "system" {
+					continue
+				}
+				prefix := "  AI> "
+				if msg.Role == "user" {
+					prefix = "  You> "
+				}
+				// メッセージを1行に省略
+				content := msg.Content
+				if len(content) > 60 {
+					content = content[:57] + "..."
+				}
+				fmt.Printf("%s%s\n", prefix, content)
+			}
+			fmt.Println("---")
+		}
+		return "", nil
+	}
+
+	// セッションの再開
+	if *chatResume != "" {
+		var err error
+		session, err = models.LoadSession(sessionDir, *chatResume)
+		if err != nil {
+			return "", fmt.Errorf("セッションの読み込みに失敗: %w", err)
+		}
+		messages = session.Messages
+		targetFile = session.FilePath
+		fmt.Printf("セッション '%s' を再開します。\n", session.ID)
+	} else {
+		// 新しいセッションの作成
+		session = &models.ChatSession{
+			ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
+			StartTime: time.Now(),
+			FilePath:  targetFile,
+		}
+	}
 
 	// システムメッセージの設定
-	messages = append(messages, models.ChatMessage{
-		Role: "system",
-		Content: "あなたはコードレビューと改善提案を行う専門家です。\n" +
-			"コードの変更を提案する場合は以下のフォーマットで返してください：\n\n" +
-			"---PROPOSAL---\n" +
-			"[変更の説明]\n\n" +
-			"---CODE---\n" +
-			"[変更後のコード全体]\n\n" +
-			"---END---",
-	})
+	if len(messages) == 0 {
+		messages = append(messages, models.ChatMessage{
+			Role: "system",
+			Content: "あなたはコードレビューと改善提案を行う専門家です。\n" +
+				"コードの変更を提案する場合は以下のフォーマットで返してください：\n\n" +
+				"---PROPOSAL---\n" +
+				"[変更の説明]\n\n" +
+				"---CODE---\n" +
+				"[変更後のコード全体]\n\n" +
+				"---END---",
+		})
+	}
 
 	// ファイルが指定されている場合、その内容を読み込む
 	if targetFile != "" {
@@ -127,16 +201,19 @@ func executeChat(client api.APIClient, targetFile string, backupDir string) (str
 			return "", fmt.Errorf("ファイルの読み込みに失敗: %w", err)
 		}
 		fileContent = string(content)
-		messages = append(messages, models.ChatMessage{
-			Role:    "system",
-			Content: fmt.Sprintf("以下のファイルについて会話を行います：\n\n```go\n%s\n```", fileContent),
-		})
+		if len(messages) == 1 { // システムメッセージのみの場合
+			messages = append(messages, models.ChatMessage{
+				Role:    "system",
+				Content: fmt.Sprintf("以下のファイルについて会話を行います：\n\n```go\n%s\n```", fileContent),
+			})
+		}
 	}
 
 	fmt.Println("チャットを開始します。終了するには 'exit' または 'quit' と入力してください。")
 	if targetFile != "" {
 		fmt.Printf("モード: ファイル編集 (%s)\n", targetFile)
 	}
+	fmt.Printf("セッションID: %s\n", session.ID)
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
@@ -157,6 +234,13 @@ func executeChat(client api.APIClient, targetFile string, backupDir string) (str
 
 		// 終了コマンドの確認
 		if input == "exit" || input == "quit" {
+			// セッションの保存
+			session.Messages = messages
+			if err := session.SaveSession(sessionDir); err != nil {
+				fmt.Printf("警告: セッションの保存に失敗しました: %v\n", err)
+			} else {
+				fmt.Printf("セッションを保存しました。再開するには: makasero chat -r %s\n", session.ID)
+			}
 			fmt.Println("チャットを終了します。")
 			return "", nil
 		}
@@ -213,6 +297,12 @@ func executeChat(client api.APIClient, targetFile string, backupDir string) (str
 
 		// AIの応答を表示
 		fmt.Println("\n" + response)
+
+		// セッションの自動保存
+		session.Messages = messages
+		if err := session.SaveSession(sessionDir); err != nil {
+			fmt.Printf("警告: セッションの自動保存に失敗しました: %v\n", err)
+		}
 	}
 }
 
