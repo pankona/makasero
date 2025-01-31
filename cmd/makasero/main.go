@@ -16,7 +16,7 @@ var (
 
 	// explainコマンド
 	explainCmd  = app.Command("explain", "コードの説明を生成")
-	explainCode = explainCmd.Arg("code", "説明するコード").Required().String()
+	explainCode = explainCmd.Arg("code", "説明するコードまたはファイルパス").Required().String()
 
 	// chatコマンド
 	chatCmd   = app.Command("chat", "AIとチャット")
@@ -56,6 +56,15 @@ func main() {
 }
 
 func executeExplain(client api.APIClient, code string) (string, error) {
+	// ファイルが存在する場合はファイルから読み取る
+	if _, err := os.Stat(code); err == nil {
+		content, err := os.ReadFile(code)
+		if err != nil {
+			return "", fmt.Errorf("ファイルの読み込みに失敗: %w", err)
+		}
+		code = string(content)
+	}
+
 	messages := []models.ChatMessage{
 		{
 			Role:    "system",
@@ -63,7 +72,7 @@ func executeExplain(client api.APIClient, code string) (string, error) {
 		},
 		{
 			Role:    "user",
-			Content: fmt.Sprintf("以下のコードを説明してください：\n\n%s", code),
+			Content: fmt.Sprintf("以下のコードを説明してください：\n\n```go\n%s\n```", code),
 		},
 	}
 

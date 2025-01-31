@@ -1,4 +1,4 @@
-.PHONY: build test clean install
+.PHONY: build test clean install integration-test
 
 # ビルド設定
 BINARY_NAME=makasero
@@ -12,6 +12,10 @@ build:
 test:
 	@echo "Running tests..."
 	@go test -v ./...
+
+integration-test: build
+	@echo "Running integration tests..."
+	@./test/integration/test_cli.sh
 
 clean:
 	@echo "Cleaning..."
