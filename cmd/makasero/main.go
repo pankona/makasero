@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,6 +13,7 @@ import (
 	kingpin "github.com/alecthomas/kingpin/v2"
 	"github.com/pankona/makasero/internal/api"
 	"github.com/pankona/makasero/internal/models"
+	"github.com/pankona/makasero/internal/proposal"
 )
 
 var (
@@ -22,11 +24,12 @@ var (
 	explainCode = explainCmd.Arg("code", "説明するコードまたはファイルパス").Required().String()
 
 	// chatコマンド
-	chatCmd    = app.Command("chat", "AIとチャット")
-	chatInput  = chatCmd.Arg("input", "チャット入力").Required().String()
-	chatFile   = chatCmd.Flag("file", "対象ファイル").Short('f').String()
-	chatApply  = chatCmd.Flag("apply", "変更を適用する").Short('a').Bool()
-	chatBackup = chatCmd.Flag("backup-dir", "バックアップディレクトリ").Default("backups").String()
+	chatCmd     = app.Command("chat", "AIとチャット")
+	chatInput   = chatCmd.Arg("input", "チャット入力").Required().String()
+	chatFile    = chatCmd.Flag("file", "対象ファイル").Short('f').String()
+	chatApply   = chatCmd.Flag("apply", "変更を適用する").Short('a').Bool()
+	chatBackup  = chatCmd.Flag("backup-dir", "バックアップディレクトリ").Default("backups").String()
+	chatAutoYes = chatCmd.Flag("yes", "確認をスキップして自動的に承認").Short('y').Bool()
 )
 
 func main() {
@@ -62,8 +65,20 @@ func main() {
 }
 
 func executeExplain(client api.APIClient, code string) (string, error) {
-	// ファイルが存在する場合はファイルから読み取る
-	if _, err := os.Stat(code); err == nil {
+	// コードがファイルパスのような形式かチェック
+	if strings.Contains(code, "/") || strings.Contains(code, "\\") {
+		// ファイルパスとして処理
+		info, err := os.Stat(code)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return "", fmt.Errorf("ファイルが存在しません: %s", code)
+			}
+			return "", fmt.Errorf("ファイルの状態確認に失敗: %w", err)
+		}
+		if info.IsDir() {
+			return "", fmt.Errorf("指定されたパスはディレクトリです: %s", code)
+		}
+
 		content, err := os.ReadFile(code)
 		if err != nil {
 			return "", fmt.Errorf("ファイルの読み込みに失敗: %w", err)
@@ -82,61 +97,64 @@ func executeExplain(client api.APIClient, code string) (string, error) {
 		},
 	}
 
-	return client.CreateChatCompletion(messages)
+	response, err := client.CreateChatCompletion(messages)
+	if err != nil {
+		return "", fmt.Errorf("APIリクエストに失敗: %w", err)
+	}
+
+	return response, nil
 }
 
 func executeChat(client api.APIClient, input string, targetFile string, backupDir string) (string, error) {
-	var messages []models.ChatMessage
-
-	// システムメッセージの準備
-	systemMessage := "あなたはコードレビューと改善提案を行う専門家です。"
-	if targetFile != "" {
-		systemMessage += "\n提案された変更は以下のフォーマットで返してください：\n\n" +
-			"---PROPOSAL---\n" +
-			"[変更の説明]\n\n" +
-			"---CODE---\n" +
-			"[変更後のコード全体]\n\n" +
-			"---END---"
-	}
-
-	messages = append(messages, models.ChatMessage{
-		Role:    "system",
-		Content: systemMessage,
-	})
-
-	// ファイルが指定されている場合、その内容を読み取ってコンテキストとして追加
+	// ファイルが指定されている場合、その内容を読み込む
+	var fileContent string
 	if targetFile != "" {
 		content, err := os.ReadFile(targetFile)
 		if err != nil {
 			return "", fmt.Errorf("ファイルの読み込みに失敗: %w", err)
 		}
+		fileContent = string(content)
+		input = fmt.Sprintf("以下のコードを改善してください:\n\n%s\n\n%s", fileContent, input)
+	}
 
-		fileContext := fmt.Sprintf("以下のファイルの内容について回答してください：\n\n```go\n%s\n```\n\n質問：%s",
-			string(content), input)
-		messages = append(messages, models.ChatMessage{
+	// APIにリクエストを送信
+	messages := []models.ChatMessage{
+		{
+			Role: "system",
+			Content: "あなたはコードレビューと改善提案を行う専門家です。\n" +
+				"提案された変更は以下のフォーマットで返してください：\n\n" +
+				"---PROPOSAL---\n" +
+				"[変更の説明]\n\n" +
+				"---CODE---\n" +
+				"[変更後のコード全体]\n\n" +
+				"---END---",
+		},
+		{
 			Role:    "user",
-			Content: fileContext,
-		})
-	} else {
-		// JSON形式の場合はそのまま使用、そうでない場合は単純なメッセージとして扱う
-		if err := json.Unmarshal([]byte(input), &messages); err != nil {
-			messages = append(messages, models.ChatMessage{
-				Role:    "user",
-				Content: input,
-			})
-		}
+			Content: input,
+		},
 	}
 
 	response, err := client.CreateChatCompletion(messages)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("APIリクエストに失敗: %w", err)
 	}
 
-	// ファイルが指定され、かつ変更を適用する場合
-	if targetFile != "" && *chatApply {
+	// ファイルが指定されている場合、変更を処理
+	if targetFile != "" {
 		proposal, code, err := parseAIResponse(response)
 		if err != nil {
 			return response, nil // パースに失敗しても元のレスポンスは返す
+		}
+
+		// 差分を表示し、ユーザーの承認を得る
+		approved, err := promptForApproval(fileContent, code)
+		if err != nil {
+			return "", fmt.Errorf("ユーザー承認の取得に失敗: %w", err)
+		}
+
+		if !approved {
+			return "変更は取り消されました。", nil
 		}
 
 		// バックアップの作成
@@ -171,34 +189,66 @@ func parseAIResponse(response string) (proposal string, code string, err error) 
 	return proposal, code, nil
 }
 
-// バックアップの作成
-func createBackup(filePath string, backupDir string) error {
-	if backupDir == "" {
-		return nil
+// 変更の差分を表示し、ユーザーの承認を得る
+func promptForApproval(originalCode, proposedCode string) (bool, error) {
+	diffUtil := proposal.NewDiffUtility()
+	diff := diffUtil.FormatDiff(originalCode, proposedCode)
+
+	fmt.Println("\n変更内容:")
+	fmt.Println(diff)
+
+	// テスト時または自動承認オプションが指定されている場合は自動的に承認
+	if os.Getenv("MAKASERO_TEST") == "1" || *chatAutoYes {
+		return true, nil
 	}
 
+	fmt.Print("\n変更を適用しますか？ [y/N]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return false, fmt.Errorf("入力の読み取りに失敗: %w", err)
+	}
+
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "y", nil
+}
+
+// バックアップの作成
+func createBackup(filePath, backupDir string) error {
+	if backupDir == "" {
+		backupDir = "backups"
+	}
+
+	// バックアップディレクトリの作成
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return fmt.Errorf("バックアップディレクトリの作成に失敗: %w", err)
 	}
 
-	content, err := os.ReadFile(filePath)
+	backupPath := filepath.Join(backupDir,
+		fmt.Sprintf("%s.%d.bak",
+			filepath.Base(filePath),
+			time.Now().UnixNano()))
+
+	// ファイルをコピー
+	input, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("ファイルの読み込みに失敗: %w", err)
 	}
 
-	backupPath := filepath.Join(backupDir, fmt.Sprintf("%s.%d.bak",
-		filepath.Base(filePath), time.Now().Unix()))
-
-	if err := os.WriteFile(backupPath, content, 0644); err != nil {
-		return fmt.Errorf("バックアップファイルの作成に失敗: %w", err)
+	if err := os.WriteFile(backupPath, input, 0644); err != nil {
+		return fmt.Errorf("バックアップの書き込みに失敗: %w", err)
 	}
 
 	return nil
 }
 
 // 変更の適用
-func applyChanges(filePath string, newContent string) error {
-	return os.WriteFile(filePath, []byte(newContent), 0644)
+func applyChanges(filePath, newContent string) error {
+	if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("ファイルの書き込みに失敗: %w", err)
+	}
+	return nil
 }
 
 func executeCommand(client api.APIClient, command, input, targetFile, backupDir string) (string, error) {
