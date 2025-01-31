@@ -24,12 +24,9 @@ var (
 	explainCode = explainCmd.Arg("code", "説明するコードまたはファイルパス").Required().String()
 
 	// chatコマンド
-	chatCmd     = app.Command("chat", "AIとチャット")
-	chatInput   = chatCmd.Arg("input", "チャット入力").Required().String()
-	chatFile    = chatCmd.Flag("file", "対象ファイル").Short('f').String()
-	chatApply   = chatCmd.Flag("apply", "変更を適用する").Short('a').Bool()
-	chatBackup  = chatCmd.Flag("backup-dir", "バックアップディレクトリ").Default("backups").String()
-	chatAutoYes = chatCmd.Flag("yes", "確認をスキップして自動的に承認").Short('y').Bool()
+	chatCmd    = app.Command("chat", "AIとチャット")
+	chatFile   = chatCmd.Flag("file", "対象ファイル").Short('f').String()
+	chatBackup = chatCmd.Flag("backup-dir", "バックアップディレクトリ").Default("backups").String()
 )
 
 func main() {
@@ -47,7 +44,7 @@ func main() {
 	case explainCmd.FullCommand():
 		result, err = executeCommand(client, "explain", *explainCode, "", "")
 	case chatCmd.FullCommand():
-		result, err = executeCommand(client, "chat", *chatInput, *chatFile, *chatBackup)
+		result, err = executeChat(client, *chatFile, *chatBackup)
 	}
 
 	if err != nil {
@@ -58,10 +55,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	outputResponse(models.Response{
-		Success: true,
-		Data:    result,
-	})
+	if command != chatCmd.FullCommand() {
+		outputResponse(models.Response{
+			Success: true,
+			Data:    result,
+		})
+	}
 }
 
 func executeExplain(client api.APIClient, code string) (string, error) {
@@ -105,72 +104,116 @@ func executeExplain(client api.APIClient, code string) (string, error) {
 	return response, nil
 }
 
-func executeChat(client api.APIClient, input string, targetFile string, backupDir string) (string, error) {
-	// ファイルが指定されている場合、その内容を読み込む
+func executeChat(client api.APIClient, targetFile string, backupDir string) (string, error) {
+	var messages []models.ChatMessage
 	var fileContent string
+
+	// システムメッセージの設定
+	messages = append(messages, models.ChatMessage{
+		Role: "system",
+		Content: "あなたはコードレビューと改善提案を行う専門家です。\n" +
+			"コードの変更を提案する場合は以下のフォーマットで返してください：\n\n" +
+			"---PROPOSAL---\n" +
+			"[変更の説明]\n\n" +
+			"---CODE---\n" +
+			"[変更後のコード全体]\n\n" +
+			"---END---",
+	})
+
+	// ファイルが指定されている場合、その内容を読み込む
 	if targetFile != "" {
 		content, err := os.ReadFile(targetFile)
 		if err != nil {
 			return "", fmt.Errorf("ファイルの読み込みに失敗: %w", err)
 		}
 		fileContent = string(content)
-		input = fmt.Sprintf("以下のコードを改善してください:\n\n%s\n\n%s", fileContent, input)
+		messages = append(messages, models.ChatMessage{
+			Role:    "system",
+			Content: fmt.Sprintf("以下のファイルについて会話を行います：\n\n```go\n%s\n```", fileContent),
+		})
 	}
 
-	// APIにリクエストを送信
-	messages := []models.ChatMessage{
-		{
-			Role: "system",
-			Content: "あなたはコードレビューと改善提案を行う専門家です。\n" +
-				"提案された変更は以下のフォーマットで返してください：\n\n" +
-				"---PROPOSAL---\n" +
-				"[変更の説明]\n\n" +
-				"---CODE---\n" +
-				"[変更後のコード全体]\n\n" +
-				"---END---",
-		},
-		{
+	fmt.Println("チャットを開始します。終了するには 'exit' または 'quit' と入力してください。")
+	if targetFile != "" {
+		fmt.Printf("モード: ファイル編集 (%s)\n", targetFile)
+	}
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		if targetFile != "" {
+			fmt.Print("\nmakasero (file)> ")
+		} else {
+			fmt.Print("\nmakasero> ")
+		}
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return "", fmt.Errorf("入力の読み取りに失敗: %w", err)
+		}
+
+		input = strings.TrimSpace(input)
+		if input == "" {
+			continue
+		}
+
+		// 終了コマンドの確認
+		if input == "exit" || input == "quit" {
+			fmt.Println("チャットを終了します。")
+			return "", nil
+		}
+
+		// ユーザーの入力をメッセージに追加
+		messages = append(messages, models.ChatMessage{
 			Role:    "user",
 			Content: input,
-		},
-	}
+		})
 
-	response, err := client.CreateChatCompletion(messages)
-	if err != nil {
-		return "", fmt.Errorf("APIリクエストに失敗: %w", err)
-	}
-
-	// ファイルが指定されている場合、変更を処理
-	if targetFile != "" {
-		proposal, code, err := parseAIResponse(response)
+		// APIにリクエストを送信
+		response, err := client.CreateChatCompletion(messages)
 		if err != nil {
-			return response, nil // パースに失敗しても元のレスポンスは返す
+			return "", fmt.Errorf("APIリクエストに失敗: %w", err)
 		}
 
-		// 差分を表示し、ユーザーの承認を得る
-		approved, err := promptForApproval(fileContent, code)
-		if err != nil {
-			return "", fmt.Errorf("ユーザー承認の取得に失敗: %w", err)
+		// AIの応答をメッセージに追加
+		messages = append(messages, models.ChatMessage{
+			Role:    "assistant",
+			Content: response,
+		})
+
+		// ファイルが指定されている場合、変更提案を処理
+		if targetFile != "" && strings.Contains(response, "---PROPOSAL---") {
+			_, code, err := parseAIResponse(response)
+			if err == nil {
+				// 差分を表示し、ユーザーの承認を得る
+				approved, err := promptForApproval(fileContent, code)
+				if err != nil {
+					fmt.Printf("エラー: %v\n", err)
+					continue
+				}
+
+				if approved {
+					// バックアップの作成
+					if err := createBackup(targetFile, backupDir); err != nil {
+						fmt.Printf("バックアップの作成に失敗: %v\n", err)
+						continue
+					}
+
+					// 変更の適用
+					if err := applyChanges(targetFile, code); err != nil {
+						fmt.Printf("変更の適用に失敗: %v\n", err)
+						continue
+					}
+
+					fileContent = code // 更新されたコードを保持
+					fmt.Println("変更を適用しました。")
+				} else {
+					fmt.Println("変更は取り消されました。")
+				}
+			}
 		}
 
-		if !approved {
-			return "変更は取り消されました。", nil
-		}
-
-		// バックアップの作成
-		if err := createBackup(targetFile, backupDir); err != nil {
-			return "", fmt.Errorf("バックアップの作成に失敗: %w", err)
-		}
-
-		// 変更の適用
-		if err := applyChanges(targetFile, code); err != nil {
-			return "", fmt.Errorf("変更の適用に失敗: %w", err)
-		}
-
-		return fmt.Sprintf("変更を適用しました。\n\n提案内容：\n%s", proposal), nil
+		// AIの応答を表示
+		fmt.Println("\n" + response)
 	}
-
-	return response, nil
 }
 
 // AIの応答から提案と変更後のコードを抽出
@@ -198,7 +241,7 @@ func promptForApproval(originalCode, proposedCode string) (bool, error) {
 	fmt.Println(diff)
 
 	// テスト時または自動承認オプションが指定されている場合は自動的に承認
-	if os.Getenv("MAKASERO_TEST") == "1" || *chatAutoYes {
+	if os.Getenv("MAKASERO_TEST") == "1" {
 		return true, nil
 	}
 
@@ -256,7 +299,7 @@ func executeCommand(client api.APIClient, command, input, targetFile, backupDir 
 	case "explain":
 		return executeExplain(client, input)
 	case "chat":
-		return executeChat(client, input, targetFile, backupDir)
+		return executeChat(client, targetFile, backupDir)
 	default:
 		return "", fmt.Errorf("不明なコマンド: %s", command)
 	}
