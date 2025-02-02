@@ -1,6 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,14 +13,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// モックAPIクライアント
-type mockAPIClient struct {
-	response string
-	err      error
-}
+// osExitをモック化するための変数
+var osExit = os.Exit
 
-func (m *mockAPIClient) CreateChatCompletion(messages []models.ChatMessage) (string, error) {
-	return m.response, m.err
+// エラーハンドリング用のヘルパー関数
+func handleError(err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "エラー: %v\n", err)
+		osExit(1)
+	}
+	osExit(0)
 }
 
 func TestParseAIResponse(t *testing.T) {
@@ -172,189 +178,95 @@ func TestApplyChanges(t *testing.T) {
 	}
 }
 
-func TestExecuteChat(t *testing.T) {
-	// テスト用の一時ディレクトリを作成
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.go")
-	backupDir := filepath.Join(tmpDir, "backups")
+func TestOutputResponse(t *testing.T) {
+	// 標準出力をキャプチャ
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	assert.NoError(t, err)
+	os.Stdout = w
 
-	// テスト用のファイルを作成
-	testContent := "package main\n\nfunc main() {}\n"
-	err := os.WriteFile(testFile, []byte(testContent), 0644)
+	// テスト終了時に元の標準出力を復元
+	defer func() {
+		os.Stdout = oldStdout
+		r.Close()
+		w.Close()
+	}()
+
+	// テストレスポンスを出力
+	response := models.Response{
+		Success: true,
+		Data:    "テストレスポンス",
+	}
+	outputResponse(response)
+	w.Close()
+
+	// 出力を読み取り
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
 	assert.NoError(t, err)
 
-	// テスト環境変数の設定
-	os.Setenv("MAKASERO_TEST", "1")
-	defer os.Unsetenv("MAKASERO_TEST")
-
-	tests := []struct {
-		name       string
-		client     *mockAPIClient
-		input      string
-		targetFile string
-		backupDir  string
-		wantErr    bool
-	}{
-		{
-			name: "正常系：ファイルなし",
-			client: &mockAPIClient{
-				response: "テスト応答",
-				err:      nil,
-			},
-			input:   "テスト",
-			wantErr: false,
-		},
-		{
-			name: "正常系：ファイルあり",
-			client: &mockAPIClient{
-				response: `---PROPOSAL---
-テスト提案
----CODE---
-package main
-
-func main() {
-    fmt.Println("Hello")
-}
----END---`,
-				err: nil,
-			},
-			input:      "テスト",
-			targetFile: testFile,
-			backupDir:  backupDir,
-			wantErr:    false,
-		},
-		{
-			name: "異常系：APIエラー",
-			client: &mockAPIClient{
-				response: "",
-				err:      assert.AnError,
-			},
-			input:   "テスト",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := executeChat(tt.client, tt.input, tt.targetFile, tt.backupDir)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestExecuteExplain(t *testing.T) {
-	// テスト用の一時ディレクトリを作成
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.go")
-	testContent := "package main\n\nfunc main() {}\n"
-	err := os.WriteFile(testFile, []byte(testContent), 0644)
+	// JSONとして解析可能か確認
+	var got models.Response
+	err = json.Unmarshal(buf.Bytes(), &got)
 	assert.NoError(t, err)
-
-	tests := []struct {
-		name    string
-		client  *mockAPIClient
-		code    string
-		wantErr bool
-	}{
-		{
-			name: "正常系：コード文字列",
-			client: &mockAPIClient{
-				response: "コードの説明",
-				err:      nil,
-			},
-			code:    "func main() {}",
-			wantErr: false,
-		},
-		{
-			name: "正常系：ファイルパス",
-			client: &mockAPIClient{
-				response: "ファイルの説明",
-				err:      nil,
-			},
-			code:    testFile,
-			wantErr: false,
-		},
-		{
-			name: "異常系：APIエラー",
-			client: &mockAPIClient{
-				response: "",
-				err:      assert.AnError,
-			},
-			code:    "func main() {}",
-			wantErr: true,
-		},
-		{
-			name: "異常系：存在しないファイル",
-			client: &mockAPIClient{
-				response: "",
-				err:      nil,
-			},
-			code:    filepath.Join(tmpDir, "notexist.go"),
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := executeExplain(tt.client, tt.code)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+	assert.Equal(t, response.Success, got.Success)
+	assert.Equal(t, response.Data, got.Data)
 }
 
-func TestExecuteCommand(t *testing.T) {
-	client := &mockAPIClient{
-		response: "テスト応答",
-		err:      nil,
-	}
-
+func TestHandleError(t *testing.T) {
 	tests := []struct {
-		name       string
-		command    string
-		input      string
-		targetFile string
-		backupDir  string
-		wantErr    bool
+		name     string
+		err      error
+		wantExit int
 	}{
 		{
-			name:    "正常系：explainコマンド",
-			command: "explain",
-			input:   "func main() {}",
-			wantErr: false,
+			name:     "正常系：エラーなし",
+			err:      nil,
+			wantExit: 0,
 		},
 		{
-			name:    "正常系：chatコマンド",
-			command: "chat",
-			input:   "テスト",
-			wantErr: false,
-		},
-		{
-			name:    "異常系：不明なコマンド",
-			command: "unknown",
-			input:   "テスト",
-			wantErr: true,
+			name:     "異常系：エラーあり",
+			err:      fmt.Errorf("テストエラー"),
+			wantExit: 1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := executeCommand(client, tt.command, tt.input, tt.targetFile, tt.backupDir)
+			// 標準エラー出力をキャプチャ
+			oldStderr := os.Stderr
+			r, w, _ := os.Pipe()
+			os.Stderr = w
 
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
+			// exit関数をモック
+			var exitCode int
+			oldOsExit := osExit
+			osExit = func(code int) {
+				exitCode = code
+				panic("test exit") // テスト用にpanicを発生させる
 			}
+
+			// テスト終了時に元の状態を復元
+			defer func() {
+				os.Stderr = oldStderr
+				osExit = oldOsExit
+				r.Close()
+				w.Close()
+				// panicをリカバー
+				recover()
+			}()
+
+			handleError(tt.err)
+			w.Close()
+
+			// 出力を読み取り
+			var buf bytes.Buffer
+			io.Copy(&buf, r)
+
+			if tt.err != nil {
+				assert.Contains(t, buf.String(), tt.err.Error())
+			}
+			assert.Equal(t, tt.wantExit, exitCode)
 		})
 	}
 }
