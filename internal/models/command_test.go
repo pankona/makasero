@@ -127,9 +127,7 @@ go test ./...
 ---EXPLANATION---
 説明
 ---END---`,
-			wantCommand:     "",
-			wantExplanation: "説明",
-			wantErr:         false,
+			wantErr: true, // 空のコマンドはエラーとして扱う
 		},
 	}
 

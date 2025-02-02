@@ -248,35 +248,190 @@ func TestGetSimilarity(t *testing.T) {
 		want     float64
 	}{
 		{
-			name:     "完全一致",
-			original: "Hello World",
-			search:   "Hello World",
+			name:     "正常系：完全一致",
+			original: "Hello, World!",
+			search:   "Hello, World!",
 			want:     1.0,
 		},
 		{
-			name:     "空の検索文字列",
-			original: "Hello World",
+			name:     "正常系：部分一致",
+			original: "Hello, World!",
+			search:   "Hello",
+			want:     0.3846153846153846,
+		},
+		{
+			name:     "正常系：大文字小文字の違い",
+			original: "Hello, World!",
+			search:   "hello, world!",
+			want:     0.8461538461538461,
+		},
+		{
+			name:     "正常系：空文字列",
+			original: "",
 			search:   "",
 			want:     1.0,
 		},
 		{
-			name:     "部分一致",
-			original: "Hello World",
-			search:   "Hello",
-			want:     0.5,
+			name:     "正常系：空白の違い",
+			original: "Hello,  World!",
+			search:   "Hello, World!",
+			want:     1.0,
 		},
 		{
-			name:     "空白の違いを無視",
-			original: "Hello    World",
-			search:   "Hello World",
+			name:     "正常系：コメントの除去",
+			original: "Hello, World! // コメント",
+			search:   "Hello, World!",
 			want:     1.0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			similarity := getSimilarity(tt.original, tt.search)
-			assert.InDelta(t, tt.want, similarity, 0.1)
+			got := getSimilarity(tt.original, tt.search)
+			assert.InDelta(t, tt.want, got, 0.0001)
+		})
+	}
+}
+
+func TestDiffError_Error(t *testing.T) {
+	tests := []struct {
+		name string
+		err  *DiffError
+		want string
+	}{
+		{
+			name: "正常系：すべてのフィールドが設定されている場合",
+			err: &DiffError{
+				Message:     "テストエラー",
+				Context:     "検索コンテキスト",
+				Similarity:  0.8,
+				RequiredSim: 0.9,
+				SearchRange: "1-10",
+				BestMatch:   "最も近い一致",
+				OrigContent: "元のコンテンツ",
+			},
+			want: `テストエラー
+
+デバッグ情報:
+- 類似度スコア: 80%
+- 必要な類似度: 90%
+- 検索範囲: 1-10
+
+検索内容:
+検索コンテキスト
+
+最も近い一致:
+最も近い一致
+
+元のコンテンツ:
+元のコンテンツ`,
+		},
+		{
+			name: "正常系：最小限のフィールドのみ設定されている場合",
+			err: &DiffError{
+				Message:     "最小限のエラー",
+				Similarity:  0.5,
+				RequiredSim: 1.0,
+			},
+			want: `最小限のエラー
+
+デバッグ情報:
+- 類似度スコア: 50%
+- 必要な類似度: 100%
+- 検索範囲: 
+
+検索内容:
+
+
+最も近い一致:
+
+
+元のコンテンツ:
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.err.Error()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestMin(t *testing.T) {
+	tests := []struct {
+		name    string
+		numbers []int
+		want    int
+	}{
+		{
+			name:    "正常系：正の数",
+			numbers: []int{3, 1, 4, 1, 5},
+			want:    1,
+		},
+		{
+			name:    "正常系：負の数を含む",
+			numbers: []int{-1, 2, -3, 4},
+			want:    -3,
+		},
+		{
+			name:    "正常系：同じ数を含む",
+			numbers: []int{2, 2, 2},
+			want:    2,
+		},
+		{
+			name:    "正常系：1つの数",
+			numbers: []int{42},
+			want:    42,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := min(tt.numbers...)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestMax(t *testing.T) {
+	tests := []struct {
+		name string
+		a    int
+		b    int
+		want int
+	}{
+		{
+			name: "正常系：aがbより大きい",
+			a:    5,
+			b:    3,
+			want: 5,
+		},
+		{
+			name: "正常系：bがaより大きい",
+			a:    2,
+			b:    4,
+			want: 4,
+		},
+		{
+			name: "正常系：aとbが等しい",
+			a:    7,
+			b:    7,
+			want: 7,
+		},
+		{
+			name: "正常系：負の数",
+			a:    -2,
+			b:    -5,
+			want: -2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := max(tt.a, tt.b)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

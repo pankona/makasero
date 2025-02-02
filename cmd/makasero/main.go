@@ -216,6 +216,14 @@ func executeChat(client api.APIClient, targetFile string, backupDir string) (str
 	fmt.Printf("セッションID: %s\n", session.ID)
 	reader := bufio.NewReader(os.Stdin)
 
+	// コマンドアナライザーの初期化
+	analyzers := []models.CommandAnalyzer{
+		models.NewTestCommandAnalyzer(),
+	}
+
+	// コマンドランナーの初期化
+	runner := models.NewCommandRunner(nil, client)
+
 	for {
 		if targetFile != "" {
 			fmt.Print("\nmakasero (file)> ")
@@ -245,7 +253,27 @@ func executeChat(client api.APIClient, targetFile string, backupDir string) (str
 			return "", nil
 		}
 
-		// ユーザーの入力をメッセージに追加
+		// コマンドの分析と提案
+		var commandProposed bool
+		for _, analyzer := range analyzers {
+			if proposal, ok := analyzer.AnalyzePrompt(input, client); ok {
+				commandProposed = true
+				if err := runner.RunWithApproval(proposal); err != nil {
+					if strings.Contains(err.Error(), "キャンセル") {
+						fmt.Println("コマンドの実行をキャンセルしました。")
+					} else {
+						fmt.Printf("エラー: %v\n", err)
+					}
+				}
+				break
+			}
+		}
+
+		if commandProposed {
+			continue
+		}
+
+		// 通常のチャット処理
 		messages = append(messages, models.ChatMessage{
 			Role:    "user",
 			Content: input,

@@ -80,35 +80,40 @@ func (a *TestCommandAnalyzer) AnalyzePrompt(prompt string, client APIClient) (*C
 }
 
 func parseCommandResponse(response string) (command string, explanation string, err error) {
+	// デバッグ用にレスポンスを出力
+	fmt.Printf("LLMからのレスポンス:\n%s\n", response)
+
 	cmdStart := "---COMMAND---"
 	expStart := "---EXPLANATION---"
 	end := "---END---"
 
-	cmdIndex := indexOf(response, cmdStart)
-	expIndex := indexOf(response, expStart)
-	endIndex := indexOf(response, end)
+	// 改行を含む可能性を考慮
+	response = strings.ReplaceAll(response, "\r\n", "\n")
+
+	cmdIndex := strings.Index(response, cmdStart)
+	expIndex := strings.Index(response, expStart)
+	endIndex := strings.Index(response, end)
 
 	if cmdIndex == -1 || expIndex == -1 || endIndex == -1 {
-		return "", "", fmt.Errorf("invalid response format")
+		return "", "", fmt.Errorf("invalid response format: missing markers")
 	}
 
-	command = extractBetween(response, cmdStart, expStart)
-	explanation = extractBetween(response, expStart, end)
+	cmdStartPos := cmdIndex + len(cmdStart)
+	expStartPos := expIndex + len(expStart)
+
+	// コマンドとその説明を抽出
+	command = strings.TrimSpace(response[cmdStartPos:expIndex])
+	explanation = strings.TrimSpace(response[expStartPos:endIndex])
+
+	// 空のコマンドや説明をチェック
+	if command == "" {
+		return "", "", fmt.Errorf("empty command")
+	}
+	if explanation == "" {
+		return "", "", fmt.Errorf("empty explanation")
+	}
 
 	return command, explanation, nil
-}
-
-func indexOf(s, substr string) int {
-	return strings.Index(s, substr)
-}
-
-func extractBetween(s, start, end string) string {
-	startIndex := strings.Index(s, start) + len(start)
-	endIndex := strings.Index(s, end)
-	if startIndex == -1 || endIndex == -1 {
-		return ""
-	}
-	return strings.TrimSpace(s[startIndex:endIndex])
 }
 
 // CommandExecutor はコマンドを実行するインターフェース
@@ -195,15 +200,19 @@ func (r *CommandRunner) RunWithApproval(proposal *CommandProposal) error {
 実行結果：
 %s
 
-修正案を提示する場合は以下のフォーマットで返してください：
+応答は以下の2つのパターンのいずれかで返してください：
 
+1. 修正案がある場合：
 ---COMMAND---
 [修正したコマンド]
 ---EXPLANATION---
 [修正内容の説明]
 ---END---
 
-修正の必要がない場合は "NO_FIX_NEEDED" と返してください。`, proposal.Command, output),
+2. 修正の必要がない、またはコマンドでは解決できない場合：
+NO_FIX_NEEDED
+
+それ以外の形式は使用しないでください。`, proposal.Command, output),
 			},
 		}
 
@@ -211,6 +220,9 @@ func (r *CommandRunner) RunWithApproval(proposal *CommandProposal) error {
 		if err != nil {
 			return fmt.Errorf("APIリクエストに失敗: %w", err)
 		}
+
+		// デバッグ用にレスポンスを出力
+		fmt.Printf("\nLLMからの応答:\n%s\n", response)
 
 		if response == "NO_FIX_NEEDED" {
 			return fmt.Errorf("コマンドの実行に失敗し、修正案はありません: %w", err)

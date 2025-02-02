@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,19 +41,18 @@ func TestNewClient(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, client)
-				assert.Equal(t, tt.envKey, client.apiKey)
-				assert.Equal(t, defaultBaseURL, client.baseURL)
 			}
 		})
 	}
 }
 
-func TestSendChatRequest(t *testing.T) {
+func TestCreateChatCompletion(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
 		response   string
 		wantErr    bool
+		want       string
 	}{
 		{
 			name:       "正常系：APIリクエスト成功",
@@ -74,6 +72,7 @@ func TestSendChatRequest(t *testing.T) {
 				]
 			}`,
 			wantErr: false,
+			want:    "Hello!",
 		},
 		{
 			name:       "異常系：APIエラー",
@@ -86,6 +85,19 @@ func TestSendChatRequest(t *testing.T) {
 				}
 			}`,
 			wantErr: true,
+			want:    "",
+		},
+		{
+			name:       "異常系：レスポンスなし",
+			statusCode: http.StatusOK,
+			response: `{
+				"id": "test-id",
+				"object": "chat.completion",
+				"created": 1234567890,
+				"choices": []
+			}`,
+			wantErr: true,
+			want:    "",
 		},
 	}
 
@@ -99,87 +111,6 @@ func TestSendChatRequest(t *testing.T) {
 
 				w.WriteHeader(tt.statusCode)
 				w.Write([]byte(tt.response))
-			}))
-			defer server.Close()
-
-			// テスト用クライアントの作成
-			client := &Client{
-				httpClient: server.Client(),
-				apiKey:     "test-api-key",
-				baseURL:    server.URL,
-			}
-
-			// テストリクエストの作成
-			req := &models.ChatRequest{
-				Model: "gpt-4",
-				Messages: []models.ChatMessage{
-					{
-						Role:    "user",
-						Content: "Hello",
-					},
-				},
-			}
-
-			// リクエストの実行
-			resp, err := client.SendChatRequest(req)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, resp)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, resp)
-				assert.Equal(t, "Hello!", resp.Choices[0].Message.Content)
-			}
-		})
-	}
-}
-
-func TestCreateChatCompletion(t *testing.T) {
-	tests := []struct {
-		name     string
-		response *models.ChatResponse
-		want     string
-		wantErr  bool
-	}{
-		{
-			name: "正常系：レスポンスあり",
-			response: &models.ChatResponse{
-				Choices: []struct {
-					Message      models.ChatMessage `json:"message"`
-					FinishReason string             `json:"finish_reason"`
-				}{
-					{
-						Message: models.ChatMessage{
-							Role:    "assistant",
-							Content: "Hello!",
-						},
-					},
-				},
-			},
-			want:    "Hello!",
-			wantErr: false,
-		},
-		{
-			name: "異常系：レスポンスなし",
-			response: &models.ChatResponse{
-				Choices: []struct {
-					Message      models.ChatMessage `json:"message"`
-					FinishReason string             `json:"finish_reason"`
-				}{},
-			},
-			want:    "",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// モックサーバーの設定
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				response, _ := json.Marshal(tt.response)
-				w.WriteHeader(http.StatusOK)
-				w.Write(response)
 			}))
 			defer server.Close()
 
@@ -207,4 +138,72 @@ func TestCreateChatCompletion(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMockClient(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+		err      error
+		wantErr  bool
+	}{
+		{
+			name:     "正常系：レスポンスあり",
+			response: "Hello!",
+			err:      nil,
+			wantErr:  false,
+		},
+		{
+			name:     "異常系：エラーあり",
+			response: "",
+			err:      assert.AnError,
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &MockClient{
+				Response: tt.response,
+				Err:      tt.err,
+			}
+
+			got, err := client.CreateChatCompletion([]models.ChatMessage{
+				{
+					Role:    "user",
+					Content: "Hello",
+				},
+			})
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Empty(t, got)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.response, got)
+			}
+		})
+	}
+}
+
+func TestSetMockClient(t *testing.T) {
+	// 初期状態の確認
+	assert.Nil(t, mockAPIClient)
+	assert.Nil(t, mockAPIErr)
+
+	// モッククライアントの設定
+	mockClient := &MockClient{
+		Response: "Hello!",
+		Err:      nil,
+	}
+	SetMockClient(mockClient, assert.AnError)
+
+	// 設定後の状態確認
+	assert.Equal(t, mockClient, mockAPIClient)
+	assert.Equal(t, assert.AnError, mockAPIErr)
+
+	// モッククライアントのリセット
+	SetMockClient(nil, nil)
+	assert.Nil(t, mockAPIClient)
+	assert.Nil(t, mockAPIErr)
 }

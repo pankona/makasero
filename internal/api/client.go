@@ -29,8 +29,32 @@ type Client struct {
 	baseURL    string
 }
 
+// MockClient はテスト用のモッククライアントです
+type MockClient struct {
+	Response string
+	Err      error
+}
+
+func (m *MockClient) CreateChatCompletion(messages []models.ChatMessage) (string, error) {
+	return m.Response, m.Err
+}
+
+// テスト用のモッククライアントを設定
+var mockAPIClient APIClient
+var mockAPIErr error
+
+// SetMockClient はテスト用のモッククライアントを設定します
+func SetMockClient(client APIClient, err error) {
+	mockAPIClient = client
+	mockAPIErr = err
+}
+
 // NewClient creates a new API client instance
-func NewClient() (*Client, error) {
+func NewClient() (APIClient, error) {
+	if mockAPIClient != nil {
+		return mockAPIClient, mockAPIErr
+	}
+
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
 		return nil, fmt.Errorf("OPENAI_API_KEY environment variable is not set")
