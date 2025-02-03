@@ -16,4 +16,12 @@
     - Linuxコマンドの使用
     - パイプやリダイレクトの使用
     - 読み取り専用操作の制限
-  - 成果物: `internal/chat/prompts/command.go` 
+  - 成果物: `internal/chat/prompts/command.go`
+
+- [x] プロンプトの改善と動作検証 (完了日: 2024-02-04)
+  - [x] コマンド例の追加（`*.log`など）
+  - [x] システム情報とエラーハンドリングのセクションの追加
+  - [x] テストの修正と全テストの成功確認
+  - 成果物: 
+    - `internal/chat/prompts/command.go`
+    - `internal/chat/prompts/command_test.go` 
