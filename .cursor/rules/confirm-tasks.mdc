@@ -1,8 +1,4 @@
 ---
-description: 
-globs: 
----
- ---
 description: タスク管理のルール
 globs: ["docs/tasks/*.md"]
 ---
@@ -40,7 +36,7 @@ globs: ["docs/tasks/*.md"]
      - サブタスク
        - [ ] サブタスク1
        - [ ] サブタスク2
-     - 関連: [ドキュメント名](mdc:パス)
+     - 関連: [ドキュメント名](パス)
      - 期限: YYYY-MM-DD（オプション）
    ```
 
@@ -52,4 +48,4 @@ globs: ["docs/tasks/*.md"]
 6. タスク管理の運用ルール
    - 毎日の作業開始時に`in-progress.md`を確認
    - 週次で`backlog.md`の優先順位を見直し
-   - 月次で`done.md`の内容を確認し、必要に応じてアーカイブ
+   - 月次で`done.md`の内容を確認し、必要に応じてアーカイブ 
