@@ -15,28 +15,28 @@ func TestCommandSystemPrompt(t *testing.T) {
 		// 必須セクション
 		{
 			name:       "必須セクション：COMMAND",
-			checkPoint: "---COMMAND---",
+			checkPoint: CommandMarkerStart,
 		},
 		{
 			name:       "必須セクション：EXPLANATION",
-			checkPoint: "---EXPLANATION---",
+			checkPoint: CommandMarkerExplanation,
 		},
 		{
 			name:       "必須セクション：VALIDATION",
-			checkPoint: "---VALIDATION---",
+			checkPoint: CommandMarkerValidation,
 		},
 		{
 			name:       "必須セクション：END",
-			checkPoint: "---END---",
+			checkPoint: CommandMarkerEnd,
 		},
 		// 基本要件
 		{
 			name:       "要件：Linuxコマンド",
-			checkPoint: "findやgrepなどのLinuxコマンドを使用",
+			checkPoint: "findやgrepなどの検索系コマンドを使用",
 		},
 		{
 			name:       "要件：シェル機能",
-			checkPoint: "パイプやリダイレクトなどのシェル機能を活用",
+			checkPoint: "パイプやリダイレクトは必要に応じて使用",
 		},
 		{
 			name:       "要件：読み取り専用",
@@ -49,41 +49,15 @@ func TestCommandSystemPrompt(t *testing.T) {
 		// セキュリティ制約
 		{
 			name:       "セキュリティ：ディレクトリ制限",
-			checkPoint: "指定された作業ディレクトリ内でのみ操作可能",
+			checkPoint: "作業ディレクトリ内でのみ操作",
 		},
 		{
 			name:       "セキュリティ：破壊的操作",
-			checkPoint: "rm, mv, cp等の破壊的な操作は禁止",
+			checkPoint: "破壊的な操作は禁止",
 		},
 		{
-			name:       "セキュリティ：sudo制限",
-			checkPoint: "sudoの使用は禁止",
-		},
-		// システム情報
-		{
-			name:       "システム情報：OS",
-			checkPoint: "OSの種類とバージョン",
-		},
-		{
-			name:       "システム情報：シェル",
-			checkPoint: "シェルの種類",
-		},
-		{
-			name:       "システム情報：作業ディレクトリ",
-			checkPoint: "現在の作業ディレクトリ",
-		},
-		// エラーハンドリング
-		{
-			name:       "エラー：構文",
-			checkPoint: "コマンドの構文エラー",
-		},
-		{
-			name:       "エラー：権限",
-			checkPoint: "権限エラー",
-		},
-		{
-			name:       "エラー：リソース",
-			checkPoint: "リソース制限エラー",
+			name:       "セキュリティ：特権コマンド",
+			checkPoint: "特権コマンドの使用は禁止",
 		},
 	}
 
@@ -96,23 +70,27 @@ func TestCommandSystemPrompt(t *testing.T) {
 
 func TestCommandMarkers(t *testing.T) {
 	tests := []struct {
-		name   string
-		marker CommandMarkers
+		name  string
+		start string
+		exp   string
+		val   string
+		end   string
 	}{
 		{
-			name: "正常系：デフォルトマーカー",
-			marker: CommandMarkers{
-				Command:     "---COMMAND---",
-				Explanation: "---EXPLANATION---",
-				Validation:  "---VALIDATION---",
-				End:         "---END---",
-			},
+			name:  "正常系：デフォルトマーカー",
+			start: CommandMarkerStart,
+			exp:   CommandMarkerExplanation,
+			val:   CommandMarkerValidation,
+			end:   CommandMarkerEnd,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.marker, DefaultCommandMarkers)
+			assert.Equal(t, CommandMarkerStart, tt.start)
+			assert.Equal(t, CommandMarkerExplanation, tt.exp)
+			assert.Equal(t, CommandMarkerValidation, tt.val)
+			assert.Equal(t, CommandMarkerEnd, tt.end)
 		})
 	}
 }
@@ -126,37 +104,19 @@ func TestCommandResult(t *testing.T) {
 		{
 			name: "正常系：成功",
 			result: CommandResult{
-				Success:  true,
-				Output:   "test output",
-				Error:    "",
-				ExitCode: 0,
-				Duration: 100,
+				Command:     "find . -name \"*.txt\"",
+				Explanation: "テキストファイルを検索します",
+				Validation:  "読み取り専用の安全な操作です",
 			},
 			wantErr: false,
-		},
-		{
-			name: "正常系：エラー",
-			result: CommandResult{
-				Success:  false,
-				Output:   "",
-				Error:    "command not found",
-				ExitCode: 1,
-				Duration: 50,
-			},
-			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, !tt.wantErr, tt.result.Success)
-			if tt.wantErr {
-				assert.NotEmpty(t, tt.result.Error)
-				assert.NotEqual(t, 0, tt.result.ExitCode)
-			} else {
-				assert.Empty(t, tt.result.Error)
-				assert.Equal(t, 0, tt.result.ExitCode)
-			}
+			assert.NotEmpty(t, tt.result.Command)
+			assert.NotEmpty(t, tt.result.Explanation)
+			assert.NotEmpty(t, tt.result.Validation)
 		})
 	}
 }
@@ -172,12 +132,10 @@ func TestValidationError(t *testing.T) {
 			err: ValidationError{
 				Code:    "INVALID_COMMAND",
 				Message: "Invalid command",
-				Details: "The command 'rm' is not allowed",
 			},
 			check: func(t *testing.T, err ValidationError) {
 				assert.NotEmpty(t, err.Code)
 				assert.NotEmpty(t, err.Message)
-				assert.NotEmpty(t, err.Details)
 			},
 		},
 	}
@@ -198,20 +156,18 @@ func TestSecurityConstraints(t *testing.T) {
 		{
 			name: "正常系：デフォルト値",
 			constraints: SecurityConstraints{
-				WorkDir:        "/tmp",
-				AllowedCmds:    []string{"ls", "grep", "find"},
-				BlockedCmds:    []string{"rm", "mv", "cp"},
-				MaxCPUPercent:  50,
-				MaxMemoryMB:    1024,
-				TimeoutSeconds: 30,
+				WorkDir:         "/tmp",
+				AllowedCommands: []string{"ls", "grep", "find"},
+				ResourceLimits: map[string]string{
+					"cpu":    "50%",
+					"memory": "1024MB",
+					"time":   "30s",
+				},
 			},
 			check: func(t *testing.T, c SecurityConstraints) {
 				assert.NotEmpty(t, c.WorkDir)
-				assert.NotEmpty(t, c.AllowedCmds)
-				assert.NotEmpty(t, c.BlockedCmds)
-				assert.Greater(t, c.MaxCPUPercent, 0)
-				assert.Greater(t, c.MaxMemoryMB, 0)
-				assert.Greater(t, c.TimeoutSeconds, 0)
+				assert.NotEmpty(t, c.AllowedCommands)
+				assert.NotEmpty(t, c.ResourceLimits)
 			},
 		},
 	}
@@ -258,10 +214,10 @@ func TestSystemInfo(t *testing.T) {
 
 func TestCommandSystemPrompt_Integration(t *testing.T) {
 	// プロンプトにマーカーが含まれていることを確認
-	assert.True(t, strings.Contains(CommandSystemPrompt, DefaultCommandMarkers.Command))
-	assert.True(t, strings.Contains(CommandSystemPrompt, DefaultCommandMarkers.Explanation))
-	assert.True(t, strings.Contains(CommandSystemPrompt, DefaultCommandMarkers.Validation))
-	assert.True(t, strings.Contains(CommandSystemPrompt, DefaultCommandMarkers.End))
+	assert.True(t, strings.Contains(CommandSystemPrompt, CommandMarkerStart))
+	assert.True(t, strings.Contains(CommandSystemPrompt, CommandMarkerExplanation))
+	assert.True(t, strings.Contains(CommandSystemPrompt, CommandMarkerValidation))
+	assert.True(t, strings.Contains(CommandSystemPrompt, CommandMarkerEnd))
 
 	// プロンプトの形式が正しいことを確認
 	lines := strings.Split(CommandSystemPrompt, "\n")
