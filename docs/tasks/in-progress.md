@@ -12,7 +12,9 @@
     - Linuxコマンドの使用
     - パイプやリダイレクトの使用
     - 読み取り専用操作の制限
-  - 関連: [コマンド推論機能の設計](../COMMAND_INFERENCE.md)
+  - 関連: 
+    - [コマンド推論機能の設計](../COMMAND_INFERENCE.md)
+    - [コマンド推論機能の調査結果](../COMMAND_INFERENCE_RESEARCH.md)
 
 - [ ] コマンド実行機能の実装 [設計書: 動作フロー 4]
   - [ ] 安全性チェックの実装
@@ -21,4 +23,6 @@
   - [ ] コマンド実行環境の整備
     - 実行結果の取得
     - エラーハンドリング
-  - 関連: [コマンド推論機能の設計](../COMMAND_INFERENCE.md) 
+  - 関連: 
+    - [コマンド推論機能の設計](../COMMAND_INFERENCE.md)
+    - [コマンド推論機能の調査結果](../COMMAND_INFERENCE_RESEARCH.md) 
