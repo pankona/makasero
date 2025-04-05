@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/pankona/makasero/tools"
@@ -14,6 +13,7 @@ import (
 type GeminiClient struct {
 	client *genai.Client
 	model  *genai.GenerativeModel
+	chat   *genai.ChatSession
 	tools  map[string]tools.Tool
 }
 
@@ -26,9 +26,29 @@ func NewGeminiClient(apiKey string) (*GeminiClient, error) {
 	}
 
 	model := client.GenerativeModel("gemini-pro")
+
+	// ツールの設定
+	model.ToolConfig = &genai.ToolConfig{
+		FunctionCallingConfig: &genai.FunctionCallingConfig{
+			Mode: genai.FunctionCallingAuto,
+		},
+	}
+
+	chat := model.StartChat()
+
+	// システムプロンプトを設定
+	systemContent := &genai.Content{
+		Parts: []genai.Part{genai.Text(`You are an AI assistant that can use various tools to help users.
+Please use the provided functions when necessary to accomplish tasks.
+When a function is not needed, respond directly to the user.`)},
+		Role: "model",
+	}
+	chat.History = append(chat.History, systemContent)
+
 	return &GeminiClient{
 		client: client,
 		model:  model,
+		chat:   chat,
 		tools:  make(map[string]tools.Tool),
 	}, nil
 }
@@ -36,44 +56,92 @@ func NewGeminiClient(apiKey string) (*GeminiClient, error) {
 // RegisterTool はツールを登録します
 func (g *GeminiClient) RegisterTool(tool tools.Tool) {
 	g.tools[tool.Name()] = tool
-}
 
-// GenerateContent はGeminiにプロンプトを送信し、レスポンスを取得します
-func (g *GeminiClient) GenerateContent(ctx context.Context, prompt string) (string, error) {
-	// ツールの説明を生成
-	toolsDesc := make([]string, 0, len(g.tools))
-	for _, tool := range g.tools {
-		toolsDesc = append(toolsDesc, fmt.Sprintf("- %s: %s", tool.Name(), tool.Description()))
+	// ツールをFunctionDeclarationとして登録
+	funcDecl := &genai.FunctionDeclaration{
+		Name:        tool.Name(),
+		Description: tool.Description(),
+		Parameters: &genai.Schema{
+			Type: genai.TypeObject,
+			Properties: map[string]*genai.Schema{
+				"command": {
+					Type:        genai.TypeString,
+					Description: "The command to execute",
+				},
+			},
+			Required: []string{"command"},
+		},
 	}
 
-	// システムプロンプトを設定
-	systemPrompt := fmt.Sprintf(`You are an AI assistant with access to the following tools:
-
-%s
-
-When you need to use a tool, respond with a JSON object in the following format:
-{
-    "tool": "tool_name",
-    "args": {
-        "arg1": "value1",
-        "arg2": "value2"
-    }
+	// ツールを登録
+	g.model.Tools = []*genai.Tool{
+		{
+			FunctionDeclarations: []*genai.FunctionDeclaration{funcDecl},
+		},
+	}
 }
 
-Otherwise, respond with a direct answer.`, strings.Join(toolsDesc, "\n"))
+// ProcessMessage はユーザーのメッセージを処理し、適切な応答を返します。
+// 必要に応じてツールを実行し、その結果を含めた応答を生成します。
+func (g *GeminiClient) ProcessMessage(ctx context.Context, message string) (string, error) {
+	// ユーザーの入力をチャット履歴に追加
+	userContent := &genai.Content{
+		Parts: []genai.Part{genai.Text(message)},
+		Role:  "user",
+	}
 
-	// プロンプトを結合
-	fullPrompt := fmt.Sprintf("%s\n\nUser: %s", systemPrompt, prompt)
-
-	resp, err := g.model.GenerateContent(ctx, genai.Text(fullPrompt))
+	// メッセージを送信
+	resp, err := g.chat.SendMessage(ctx, userContent.Parts...)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate content: %v", err)
+		return "", fmt.Errorf("failed to send message: %v", err)
 	}
 
 	if len(resp.Candidates) == 0 {
 		return "", fmt.Errorf("no response from Gemini")
 	}
 
+	// レスポンスのパーツを確認
+	for _, part := range resp.Candidates[0].Content.Parts {
+		// FunctionCallのチェック
+		if funcCall, ok := part.(*genai.FunctionCall); ok {
+			tool, ok := g.tools[funcCall.Name]
+			if !ok {
+				return "", fmt.Errorf("unknown tool: %s", funcCall.Name)
+			}
+
+			// ツールを実行
+			result, err := tool.Execute(funcCall.Args)
+			if err != nil {
+				return "", fmt.Errorf("tool execution failed: %v", err)
+			}
+
+			// ツールの実行結果をチャット履歴に追加
+			resultContent := &genai.Content{
+				Parts: []genai.Part{genai.Text(fmt.Sprintf("Function '%s' returned: %s", funcCall.Name, result))},
+				Role:  "function",
+			}
+			g.chat.History = append(g.chat.History, resultContent)
+
+			// フォローアップの応答を取得
+			followUpResp, err := g.chat.SendMessage(ctx, genai.Text("Please provide a final answer based on the function result."))
+			if err != nil {
+				return "", fmt.Errorf("failed to get follow-up response: %v", err)
+			}
+
+			if len(followUpResp.Candidates) == 0 {
+				return "", fmt.Errorf("no follow-up response from Gemini")
+			}
+
+			text, ok := followUpResp.Candidates[0].Content.Parts[0].(genai.Text)
+			if !ok {
+				return "", fmt.Errorf("unexpected response type")
+			}
+
+			return string(text), nil
+		}
+	}
+
+	// 通常の応答を返す
 	text, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
 	if !ok {
 		return "", fmt.Errorf("unexpected response type")
