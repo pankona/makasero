@@ -6,9 +6,16 @@ import (
 	"github.com/pankona/makasero/tools"
 )
 
+// GeminiClientInterface はGeminiクライアントのインターフェースを定義します
+type GeminiClientInterface interface {
+	ProcessMessage(ctx context.Context, message string) (string, error)
+	RegisterTool(tool tools.Tool)
+	Close()
+}
+
 // Agent はAIエージェントのコアロジックを実装します
 type Agent struct {
-	gemini *GeminiClient
+	gemini GeminiClientInterface
 }
 
 // New は新しいAgentを作成します
