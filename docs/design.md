@@ -1,101 +1,178 @@
-# makasero 設計ドキュメント
+# AIエージェントの設計
 
 ## 概要
-makasero は、Goで実装されたAIエージェントのCLIツールです。Geminiをバックエンドとして使用し、ユーザーの要求を理解し、適切なアクションを実行します。
 
-## アーキテクチャ
+このAIエージェントは、GoogleのGenerative AI API（Gemini 2.5 Pro）を使用して、ユーザーの自然言語の指示をターミナルコマンドに変換し、実行する機能を提供します。
 
-### 主要コンポーネント
+## 主要コンポーネント
 
-1. **Agent**
-   - エージェントのコアロジックを実装
-   - Geminiとの通信を担当
-   - ツールの実行を管理
+### 1. メインアプリケーション (`main.go`)
 
-2. **Tools**
-   - エージェントが使用できるツール群
-   - 各ツールは独立したインターフェースを実装
-   - 例として `execCommand` を実装
+- アプリケーションのエントリーポイント
+- コマンドライン引数の処理
+- 設定の読み込み
+- AIエージェントの初期化と実行
 
-3. **CLI**
-   - コマンドラインインターフェース
-   - ユーザーとの対話を管理
+### 2. AIエージェント
 
-### ディレクトリ構造
+- Google Generative AI APIとの通信を担当
+- ユーザーの入力を受け取り、適切なターミナルコマンドを生成
+- 生成されたコマンドを実行し、結果をユーザーに返す
 
-```
-.
-├── agent/          # エージェントのコアロジック
-│   ├── agent.go    # エージェントのメイン実装
-│   └── gemini.go   # Geminiとの通信ロジック
-├── tools/          # ツール実装
-│   └── exec.go     # execCommand ツール
-└── cmd/            # CLI実装
-    └── makasero/   # メインコマンド
-        └── main.go
-```
+## 機能設計
 
-## インターフェース設計
+### 1. コマンド生成
 
-### Tool インターフェース
+- ユーザーの自然言語の指示を受け取る
+- Google Generative AI API（gemini-2.5-pro-exp-03-25）を使用して、指示をターミナルコマンドに変換
+- 生成されたコマンドの安全性を確認
+- ユーザーにコマンドを提示し、実行の確認を取る
 
-```go
-type Tool interface {
-    Name() string
-    Description() string
-    Execute(args map[string]interface{}) (string, error)
-}
-```
+### 2. コマンド実行
 
-### Agent インターフェース
+- ユーザーの確認後、生成されたコマンドを実行
+- 実行結果（標準出力、標準エラー出力）を取得
+- 実行結果をユーザーに表示
 
-```go
-type Agent interface {
-    RegisterTool(tool Tool)
-    Process(input string) (string, error)
-}
-```
+### 3. エラーハンドリング
 
-## 処理フロー
+- コマンド生成時のエラー処理
+- コマンド実行時のエラー処理
+- ユーザーへの適切なエラーメッセージの表示
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant CLI
-    participant Agent
-    participant LLM
-    participant Tools
+## 設定
 
-    User->>CLI: コマンド入力
-    CLI->>Agent: Process(input)
-    
-    loop タスク完了まで
-        Agent->>LLM: プロンプト送信
-        LLM-->>Agent: レスポンス
-        
-        alt ツール実行が必要な場合
-            Agent->>Tools: Execute(args)
-            Tools-->>Agent: 実行結果
-            Agent->>LLM: ツール実行結果を含むプロンプト
-            LLM-->>Agent: 次のアクション
-        else 直接回答可能な場合
-            Agent-->>CLI: 回答
-            CLI-->>User: 結果表示
-        end
-    end
-```
+### 環境変数
 
-## 実装の流れ
+- `GOOGLE_API_KEY`: Google Generative AI APIのAPIキー
+- `MODEL_NAME`: 使用するGenerative AIモデルの名前（デフォルト: "gemini-2.5-pro-exp-03-25"）
 
-1. 基本的なディレクトリ構造の作成
-2. Tool インターフェースの実装
-3. execCommand ツールの実装
-4. Agent の基本実装
-5. Gemini との通信ロジックの実装
-6. CLI の実装
+## セキュリティ考慮事項
+
+- 生成されたコマンドの安全性確認
+- ユーザーによる実行確認の必須化
+- APIキーの安全な管理
 
 ## 今後の拡張性
 
-- 新しいツールの追加が容易な設計
-- 他のLLMプロバイダーのサポート追加が可能な設計
-- プラグインシステムの導入可能性 
+- 複数のコマンドの連続実行
+- コマンド履歴の保存
+- カスタムプロンプトのサポート
+- 異なるAIモデルのサポート
+
+## プロンプト設計
+
+### 1. 初期バージョン（シンプル）
+
+#### システムプロンプト
+
+```
+あなたは、ユーザーの指示をターミナルコマンドに変換するAIアシスタントです。
+コマンドを実行する場合は、execCommand関数を使用してください。
+```
+
+#### ユーザープロンプトの例
+
+```
+ユーザー: カレントディレクトリのファイル一覧を表示して
+AI: ls -la
+```
+
+### 2. 今後の拡張予定
+
+以下の要素を段階的に追加していきます：
+
+1. コマンドの説明
+2. 安全性の警告
+3. より詳細な動作指示
+4. エラーハンドリングの指示
+5. 複数コマンドの連続実行のサポート
+
+### 3. プロンプトの進化方針
+
+1. まずは最小限の機能で動作確認
+2. 基本的なコマンド生成が安定したら、説明を追加
+3. 安全性の確認機能を追加
+4. より複雑な指示への対応を追加
+5. エラーハンドリングの改善を追加
+
+## エラーケース
+
+1. APIキーが設定されていない場合
+2. モデルが利用できない場合
+3. コマンド生成に失敗した場合
+4. コマンド実行に失敗した場合
+5. ユーザーがコマンドの実行をキャンセルした場合
+6. 関数呼び出しのパラメータが不正な場合
+7. 関数呼び出しの結果が不正な場合
+8. LLMが関数呼び出しを理解できない場合
+
+## Function Calling 設計
+
+### 1. 関数定義
+
+```go
+type FunctionDeclaration struct {
+    Name        string   // 関数名
+    Description string   // 関数の説明
+    Parameters  *Schema  // パラメータのスキーマ
+}
+
+type Schema struct {
+    Type        Type     // データ型
+    Properties  map[string]*Schema  // プロパティの定義
+    Required    []string // 必須パラメータ
+}
+```
+
+### 2. 実行コマンド関数の定義
+
+```go
+{
+    Name: "execCommand",
+    Description: "ターミナルコマンドを実行し、その結果を返します",
+    Parameters: &Schema{
+        Type: TypeObject,
+        Properties: map[string]*Schema{
+            "command": {
+                Type: TypeString,
+                Description: "実行するコマンド",
+            },
+            "args": {
+                Type: TypeArray,
+                Items: &Schema{
+                    Type: TypeString,
+                },
+                Description: "コマンドの引数",
+            },
+        },
+        Required: []string{"command"},
+    },
+}
+```
+
+### 3. LLMとのやり取りの流れ
+
+1. 初期化時
+   - システムプロンプトと関数定義を設定
+   - `FunctionCallingConfig`で`FunctionCallingMode`を`FunctionCallingAuto`に設定
+
+2. ユーザー入力時の処理
+   - ユーザーの自然言語の指示をLLMに送信
+   - LLMは以下のいずれかを返す：
+     - 自然言語の応答
+     - `FunctionCall`オブジェクト（コマンド実行要求）
+
+3. 関数呼び出し時の処理
+   - `FunctionCall`を受け取った場合：
+     - コマンドの安全性を確認
+     - ユーザーに実行確認を求める
+     - ユーザーの承認後、コマンドを実行
+     - 実行結果を`FunctionResponse`としてLLMに返す
+     - LLMは実行結果を踏まえて最終的な応答を生成
+
+### 4. セキュリティ考慮事項の追加
+
+- 関数呼び出しのパラメータの検証
+- コマンド実行前のサニタイズ処理
+- 関数呼び出しのログ記録
