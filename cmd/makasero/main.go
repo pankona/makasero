@@ -88,6 +88,24 @@ func run() error {
 					},
 				},
 				{
+					Name:        "getGitHubIssue",
+					Description: "GitHubのIssueの詳細を取得します",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"repository": {
+								Type:        genai.TypeString,
+								Description: "リポジトリ名（例: owner/repo）",
+							},
+							"issueNumber": {
+								Type:        genai.TypeInteger,
+								Description: "Issue番号",
+							},
+						},
+						Required: []string{"repository", "issueNumber"},
+					},
+				},
+				{
 					Name:        "complete",
 					Description: "タスクが完了したことを示します",
 					Parameters: &genai.Schema{
@@ -160,6 +178,31 @@ func run() error {
 							})
 							if err != nil {
 								return fmt.Errorf("実行結果の送信に失敗: %v", err)
+							}
+
+							// 続きのタスクを実行するために、ループを継続
+							shouldBreak = false
+						} else if p.Name == "getGitHubIssue" {
+							// パラメータの取得
+							repository := p.Args["repository"].(string)
+							issueNumber := int(p.Args["issueNumber"].(float64))
+
+							// ghコマンドを実行
+							cmd := exec.Command("gh", "issue", "view", fmt.Sprintf("%d", issueNumber), "--repo", repository, "--json", "title,body,state,labels,createdAt,updatedAt,assignees,milestone,comments")
+							output, err := cmd.CombinedOutput()
+							if err != nil {
+								return fmt.Errorf("Issueの取得に失敗: %v\n出力: %s", err, output)
+							}
+
+							// 結果をFunctionResponseとして送信
+							resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
+								Name: "getGitHubIssue",
+								Response: map[string]any{
+									"raw": string(output),
+								},
+							})
+							if err != nil {
+								return fmt.Errorf("Issue情報の送信に失敗: %v", err)
 							}
 
 							// 続きのタスクを実行するために、ループを継続
