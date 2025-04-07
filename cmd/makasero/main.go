@@ -35,8 +35,8 @@ type SerializableContent struct {
 }
 
 type SerializablePart struct {
-	Type    string      `json:"type"`    // "text", "function_call", "function_response" など
-	Content interface{} `json:"content"` // 実際のデータ
+	Type    string `json:"type"`    // "text", "function_call", "function_response" など
+	Content any    `json:"content"` // 実際のデータ
 }
 
 func (s *Session) MarshalJSON() ([]byte, error) {
@@ -208,7 +208,7 @@ var (
 	showHistory      = flag.String("sh", "", "指定したセッションIDの会話履歴全文を表示")
 )
 
-func debugPrint(format string, args ...interface{}) {
+func debugPrint(format string, args ...any) {
 	if *debug {
 		fmt.Printf("[DEBUG] "+format, args...)
 	}
