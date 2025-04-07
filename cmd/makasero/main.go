@@ -176,8 +176,10 @@ func run() error {
 							return fmt.Errorf("実行結果の送信に失敗: %v", err)
 						}
 
-						// 続きのタスクを実行するために、ループを継続
-						shouldBreak = false
+						// complete 関数以外の場合は続きのタスクを実行するために、ループを継続
+						if p.Name != "complete" {
+							shouldBreak = false
+						}
 					case genai.Text:
 						// テキスト応答の場合
 						fmt.Printf("\nAIからの応答:\n%s\n", p)
