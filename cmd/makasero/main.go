@@ -117,7 +117,7 @@ func run() error {
 		return fmt.Errorf("メッセージの送信に失敗: %v", err)
 	}
 
-	shouldBreak := false
+	var shouldBreak bool
 	for !shouldBreak {
 		shouldBreak = true
 
@@ -131,9 +131,9 @@ func run() error {
 						// 関数呼び出しの場合
 						debugPrint("Function call: %+v\n", p)
 						if p.Name == "execCommand" {
-							args, ok := p.Args["args"].([]interface{})
+							args, ok := p.Args["args"].([]any)
 							if !ok {
-								args = []interface{}{}
+								args = []any{}
 							}
 
 							// コマンドの実行
@@ -152,7 +152,7 @@ func run() error {
 							// 実行結果を FunctionResponse として送信
 							resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
 								Name: "execCommand",
-								Response: map[string]interface{}{
+								Response: map[string]any{
 									"success": err == nil,
 									"output":  string(output),
 									"error":   err,
