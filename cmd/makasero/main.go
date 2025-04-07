@@ -12,6 +12,16 @@ import (
 	"google.golang.org/api/option"
 )
 
+var (
+	debug = flag.Bool("debug", false, "デバッグモードを有効にする")
+)
+
+func debugPrint(format string, args ...interface{}) {
+	if *debug {
+		fmt.Printf("[DEBUG] "+format, args...)
+	}
+}
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -108,11 +118,7 @@ func run() error {
 	}
 
 	shouldBreak := false
-	for {
-		if shouldBreak {
-			break
-		}
-
+	for !shouldBreak {
 		shouldBreak = true
 
 		// レスポンスの処理
@@ -123,7 +129,7 @@ func run() error {
 					switch p := part.(type) {
 					case genai.FunctionCall:
 						// 関数呼び出しの場合
-						fmt.Printf("[DEBUG] Function call: %+v\n", p)
+						debugPrint("Function call: %+v\n", p)
 						if p.Name == "execCommand" {
 							args, ok := p.Args["args"].([]interface{})
 							if !ok {
@@ -135,11 +141,10 @@ func run() error {
 							for _, arg := range args {
 								cmd.Args = append(cmd.Args, arg.(string))
 							}
-							fmt.Printf("[DEBUG] Command to execute: %s %v\n", cmd.Path, cmd.Args)
+							fmt.Printf("実行するコマンド: %s %v\n", cmd.Path, cmd.Args)
 
 							output, err := cmd.CombinedOutput()
-							fmt.Printf("[DEBUG] Command output: %s\n", output)
-							fmt.Printf("[DEBUG] Command error: %v\n", err)
+							fmt.Printf("出力:\n%s\n", output)
 							if err != nil {
 								return fmt.Errorf("コマンドの実行に失敗: %v\n出力: %s", err, output)
 							}
@@ -161,15 +166,15 @@ func run() error {
 							shouldBreak = false
 						} else if p.Name == "complete" {
 							// タスク完了の場合
-							fmt.Printf("[DEBUG] Task completed: %s\n", p.Args["message"])
+							fmt.Printf("タスク完了: %s\n", p.Args["message"])
 							return nil
 						}
 					case genai.Text:
-						fmt.Printf("[DEBUG] Text response: %s\n", p)
 						// テキスト応答の場合
-						fmt.Println(p)
+						debugPrint("Text response: %s\n", p)
+						fmt.Print(p)
 					default:
-						fmt.Printf("[DEBUG] 未知の応答タイプ: %T\n", part)
+						debugPrint("未知の応答タイプ: %T\n", part)
 					}
 				}
 			}
