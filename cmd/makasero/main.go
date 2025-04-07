@@ -106,6 +106,82 @@ func run() error {
 					},
 				},
 				{
+					Name:        "gitStatus",
+					Description: "Gitのステータスを取得します",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"path": {
+								Type:        genai.TypeString,
+								Description: "確認するパス（オプション）",
+							},
+						},
+					},
+				},
+				{
+					Name:        "gitAdd",
+					Description: "指定されたファイルをGitのステージングエリアに追加します",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"paths": {
+								Type: genai.TypeArray,
+								Items: &genai.Schema{
+									Type: genai.TypeString,
+								},
+								Description: "追加するファイルのパス（配列）",
+							},
+							"all": {
+								Type:        genai.TypeBoolean,
+								Description: "すべての変更を追加するかどうか",
+							},
+						},
+					},
+				},
+				{
+					Name:        "gitCommit",
+					Description: "ステージングされた変更をコミットします",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"message": {
+								Type:        genai.TypeString,
+								Description: "コミットメッセージ",
+							},
+							"type": {
+								Type:        genai.TypeString,
+								Description: "コミットの種類（feat, fix, docs, style, refactor, test, chore など）",
+							},
+							"scope": {
+								Type:        genai.TypeString,
+								Description: "変更のスコープ（オプション）",
+							},
+							"description": {
+								Type:        genai.TypeString,
+								Description: "詳細な説明（オプション）",
+							},
+						},
+						Required: []string{"message", "type"},
+					},
+				},
+				{
+					Name:        "gitDiff",
+					Description: "Gitの差分を取得します",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"path": {
+								Type:        genai.TypeString,
+								Description: "確認するパス（オプション）",
+							},
+							"staged": {
+								Type:        genai.TypeBoolean,
+								Description: "ステージングされた変更の差分を表示するかどうか",
+							},
+						},
+					},
+				},
+				{
 					Name:        "complete",
 					Description: "タスクが完了したことを示します",
 					Parameters: &genai.Schema{
@@ -203,6 +279,144 @@ func run() error {
 							})
 							if err != nil {
 								return fmt.Errorf("Issue情報の送信に失敗: %v", err)
+							}
+
+							// 続きのタスクを実行するために、ループを継続
+							shouldBreak = false
+						} else if p.Name == "gitStatus" {
+							// パラメータの取得
+							var path string
+							if p.Args["path"] != nil {
+								path = p.Args["path"].(string)
+							}
+
+							// git statusコマンドを実行
+							cmd := exec.Command("git", "status")
+							if path != "" {
+								cmd.Args = append(cmd.Args, path)
+							}
+							output, err := cmd.CombinedOutput()
+							if err != nil {
+								return fmt.Errorf("Gitステータスの取得に失敗: %v\n出力: %s", err, output)
+							}
+
+							// 結果をFunctionResponseとして送信
+							resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
+								Name: "gitStatus",
+								Response: map[string]any{
+									"status": string(output),
+								},
+							})
+							if err != nil {
+								return fmt.Errorf("Gitステータスの送信に失敗: %v", err)
+							}
+
+							// 続きのタスクを実行するために、ループを継続
+							shouldBreak = false
+						} else if p.Name == "gitAdd" {
+							// パラメータの取得
+							var paths []any
+							if p.Args["paths"] != nil {
+								paths = p.Args["paths"].([]any)
+							}
+							all := p.Args["all"].(bool)
+
+							// git addコマンドを実行
+							cmd := exec.Command("git", "add")
+							if all {
+								cmd.Args = append(cmd.Args, "--all")
+							} else if len(paths) > 0 {
+								for _, path := range paths {
+									cmd.Args = append(cmd.Args, path.(string))
+								}
+							} else {
+								cmd.Args = append(cmd.Args, ".")
+							}
+							output, err := cmd.CombinedOutput()
+							if err != nil {
+								return fmt.Errorf("Git addに失敗: %v\n出力: %s", err, output)
+							}
+
+							// 結果をFunctionResponseとして送信
+							resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
+								Name: "gitAdd",
+								Response: map[string]any{
+									"success": err == nil,
+									"output":  string(output),
+									"error":   err,
+								},
+							})
+							if err != nil {
+								return fmt.Errorf("Git add情報の送信に失敗: %v", err)
+							}
+
+							// 続きのタスクを実行するために、ループを継続
+							shouldBreak = false
+						} else if p.Name == "gitCommit" {
+							// パラメータの取得
+							message := p.Args["message"].(string)
+							commitType := p.Args["type"].(string)
+							scope := p.Args["scope"].(string)
+							description := p.Args["description"].(string)
+
+							// git commitコマンドを実行
+							cmd := exec.Command("git", "commit", "-m", message)
+							if commitType != "" {
+								cmd.Args = append(cmd.Args, "-m", fmt.Sprintf("%s: %s", commitType, message))
+							}
+							if scope != "" {
+								cmd.Args = append(cmd.Args, "-m", fmt.Sprintf("(%s): %s", scope, description))
+							}
+							output, err := cmd.CombinedOutput()
+							if err != nil {
+								return fmt.Errorf("Git commitに失敗: %v\n出力: %s", err, output)
+							}
+
+							// 結果をFunctionResponseとして送信
+							resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
+								Name: "gitCommit",
+								Response: map[string]any{
+									"success": err == nil,
+									"output":  string(output),
+									"error":   err,
+								},
+							})
+							if err != nil {
+								return fmt.Errorf("Git commit情報の送信に失敗: %v", err)
+							}
+
+							// 続きのタスクを実行するために、ループを継続
+							shouldBreak = false
+						} else if p.Name == "gitDiff" {
+							// パラメータの取得
+							var path string
+							if p.Args["path"] != nil {
+								path = p.Args["path"].(string)
+							}
+							staged := p.Args["staged"].(bool)
+
+							// git diffコマンドを実行
+							cmd := exec.Command("git", "diff")
+							if path != "" {
+								cmd.Args = append(cmd.Args, path)
+							}
+							if staged {
+								cmd.Args = append(cmd.Args, "--cached")
+							}
+							output, err := cmd.CombinedOutput()
+							if err != nil {
+								return fmt.Errorf("Git diffに失敗: %v\n出力: %s", err, output)
+							}
+
+							// 結果をFunctionResponseとして送信
+							resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
+								Name: "gitDiff",
+								Response: map[string]any{
+									"diff": string(output),
+								},
+							})
+							if err != nil {
+								return fmt.Errorf("Git diff情報の送信に失敗: %v", err)
 							}
 
 							// 続きのタスクを実行するために、ループを継続
