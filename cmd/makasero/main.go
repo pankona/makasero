@@ -157,6 +157,12 @@ func run() error {
 						fmt.Printf("\n関数呼び出し: %s\n", p.Name)
 						fmt.Printf("引数: %+v\n", p.Args)
 
+						if p.Name == "complete" {
+							session.History = chat.History
+							session.UpdatedAt = time.Now()
+							return saveSession(session)
+						}
+
 						fn, exists := functions[p.Name]
 						if !exists {
 							return fmt.Errorf("unknown function: %s", p.Name)
@@ -177,9 +183,7 @@ func run() error {
 						}
 
 						// complete 関数以外の場合は続きのタスクを実行するために、ループを継続
-						if p.Name != "complete" {
-							shouldBreak = false
-						}
+						shouldBreak = false
 					case genai.Text:
 						// テキスト応答の場合
 						fmt.Printf("\nAIからの応答:\n%s\n", p)

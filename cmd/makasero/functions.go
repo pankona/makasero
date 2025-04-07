@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/google/generative-ai-go/genai"
 )
@@ -165,6 +166,31 @@ var functions = map[string]FunctionDefinition{
 			},
 		},
 		Handler: handleComplete,
+	},
+	"read_file": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "read_file",
+			Description: "指定されたファイルの内容を読み取ります",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"path": {
+						Type:        genai.TypeString,
+						Description: "読み取るファイルのパス",
+					},
+					"start_line": {
+						Type:        genai.TypeInteger,
+						Description: "読み取り開始行（1から始まる、省略時は1行目から）",
+					},
+					"end_line": {
+						Type:        genai.TypeInteger,
+						Description: "読み取り終了行（1から始まる、省略時は最終行まで）",
+					},
+				},
+				Required: []string{"path"},
+			},
+		},
+		Handler: handleReadFile,
 	},
 }
 
@@ -370,9 +396,69 @@ func handleGitDiff(ctx context.Context, args map[string]any) (map[string]any, er
 }
 
 func handleComplete(ctx context.Context, args map[string]any) (map[string]any, error) {
-	message := args["message"].(string)
+	// 呼び出されないので実装しなくてよい
+	return nil, nil
+}
+
+func handleReadFile(ctx context.Context, args map[string]any) (map[string]any, error) {
+	path, ok := args["path"].(string)
+	if !ok {
+		return nil, fmt.Errorf("path is required")
+	}
+
+	startLine := 1
+	if args["start_line"] != nil {
+		if sl, ok := args["start_line"].(float64); ok {
+			startLine = int(sl)
+		}
+	}
+
+	endLine := -1 // -1 means read until the end
+	if args["end_line"] != nil {
+		if el, ok := args["end_line"].(float64); ok {
+			endLine = int(el)
+		}
+	}
+
+	// catコマンドでファイルを読み取る
+	cmd := exec.Command("cat", path)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		}, nil
+	}
+
+	lines := strings.Split(string(output), "\n")
+	// 最後の空行を削除
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	if startLine < 1 || startLine > len(lines) {
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("start_line %d is out of range (1-%d)", startLine, len(lines)),
+		}, nil
+	}
+
+	if endLine == -1 {
+		endLine = len(lines)
+	} else if endLine < startLine || endLine > len(lines) {
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("end_line %d is out of range (%d-%d)", endLine, startLine, len(lines)),
+		}, nil
+	}
+
+	selectedLines := lines[startLine-1 : endLine]
 	return map[string]any{
-		"success": true,
-		"message": message,
+		"success":     true,
+		"content":     strings.Join(selectedLines, "\n"),
+		"path":        path,
+		"start_line":  startLine,
+		"end_line":    endLine,
+		"total_lines": len(lines),
 	}, nil
 }
