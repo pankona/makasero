@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+
 	"os"
 	"os/exec"
 	"strings"
@@ -13,7 +14,8 @@ import (
 )
 
 var (
-	debug = flag.Bool("debug", false, "デバッグモードを有効にする")
+	debug      = flag.Bool("debug", false, "デバッグモードを有効にする")
+	promptFile = flag.String("f", "", "プロンプトファイルのパス")
 )
 
 func debugPrint(format string, args ...interface{}) {
@@ -29,12 +31,33 @@ func main() {
 	}
 }
 
+func readPromptFromFile(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("プロンプトファイルの読み込みに失敗: %v", err)
+	}
+	return string(content), nil
+}
+
 func run() error {
 	// コマンドライン引数の処理
 	flag.Parse()
 	args := flag.Args()
-	if len(args) == 0 {
-		return fmt.Errorf("コマンドを指定してください")
+
+	// プロンプトの取得
+	var userInput string
+	if *promptFile != "" {
+		// ファイルからプロンプトを読み込む
+		prompt, err := readPromptFromFile(*promptFile)
+		if err != nil {
+			return err
+		}
+		userInput = prompt
+	} else if len(args) > 0 {
+		// コマンドライン引数からプロンプトを取得
+		userInput = strings.Join(args, " ")
+	} else {
+		return fmt.Errorf("プロンプトを指定してください（コマンドライン引数または -f オプション）")
 	}
 
 	// APIキーの取得
@@ -201,9 +224,6 @@ func run() error {
 
 	// チャットセッションの開始
 	chat := model.StartChat()
-
-	// ユーザーの入力を結合
-	userInput := strings.Join(args, " ")
 
 	// メッセージの送信と応答の取得
 	resp, err := chat.SendMessage(ctx, genai.Text(userInput))
@@ -393,7 +413,10 @@ func run() error {
 							if p.Args["path"] != nil {
 								path = p.Args["path"].(string)
 							}
-							staged := p.Args["staged"].(bool)
+							var staged bool
+							if p.Args["staged"] != nil {
+								staged = p.Args["staged"].(bool)
+							}
 
 							// git diffコマンドを実行
 							cmd := exec.Command("git", "diff")
