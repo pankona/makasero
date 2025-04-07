@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -191,6 +192,35 @@ var functions = map[string]FunctionDefinition{
 			},
 		},
 		Handler: handleReadFile,
+	},
+	"write_file": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "write_file",
+			Description: "指定されたファイルに内容を書き込みます",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"path": {
+						Type:        genai.TypeString,
+						Description: "書き込むファイルのパス",
+					},
+					"content": {
+						Type:        genai.TypeString,
+						Description: "書き込む内容",
+					},
+					"append": {
+						Type:        genai.TypeBoolean,
+						Description: "追記モードかどうか（デフォルト: false）",
+					},
+					"start_line": {
+						Type:        genai.TypeInteger,
+						Description: "書き込み開始行（1から始まる、省略時はファイルの末尾）",
+					},
+				},
+				Required: []string{"path", "content"},
+			},
+		},
+		Handler: handleWriteFile,
 	},
 }
 
@@ -460,5 +490,106 @@ func handleReadFile(ctx context.Context, args map[string]any) (map[string]any, e
 		"start_line":  startLine,
 		"end_line":    endLine,
 		"total_lines": len(lines),
+	}, nil
+}
+
+func handleWriteFile(ctx context.Context, args map[string]any) (map[string]any, error) {
+	path, ok := args["path"].(string)
+	if !ok {
+		return nil, fmt.Errorf("path is required")
+	}
+
+	content, ok := args["content"].(string)
+	if !ok {
+		return nil, fmt.Errorf("content is required")
+	}
+
+	appendMode := false
+	if args["append"] != nil {
+		appendMode = args["append"].(bool)
+	}
+
+	startLine := -1 // -1 means append to the end
+	if args["start_line"] != nil {
+		if sl, ok := args["start_line"].(float64); ok {
+			startLine = int(sl)
+		}
+	}
+
+	var file *os.File
+	var err error
+
+	if appendMode {
+		file, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	} else if startLine == -1 {
+		file, err = os.Create(path)
+	} else {
+		// 既存のファイルを読み込んで、指定行に挿入
+		existingContent, err := os.ReadFile(path)
+		if err != nil {
+			return map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			}, nil
+		}
+
+		lines := strings.Split(string(existingContent), "\n")
+		if startLine < 1 || startLine > len(lines) {
+			return map[string]any{
+				"success": false,
+				"error":   fmt.Sprintf("start_line %d is out of range (1-%d)", startLine, len(lines)),
+			}, nil
+		}
+
+		// 新しい内容を挿入
+		contentLines := strings.Split(content, "\n")
+		newLines := make([]string, 0, len(lines)+len(contentLines))
+		newLines = append(newLines, lines[:startLine-1]...)
+		newLines = append(newLines, contentLines...)
+		newLines = append(newLines, lines[startLine-1:]...)
+		newContent := strings.Join(newLines, "\n")
+
+		file, err = os.Create(path)
+		if err != nil {
+			return map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			}, nil
+		}
+		_, err = file.WriteString(newContent)
+		if err != nil {
+			file.Close()
+			return map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			}, nil
+		}
+		file.Close()
+		return map[string]any{
+			"success": true,
+			"path":    path,
+			"lines":   len(newLines),
+		}, nil
+	}
+
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		}, nil
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(content)
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		}, nil
+	}
+
+	return map[string]any{
+		"success": true,
+		"path":    path,
 	}, nil
 }
