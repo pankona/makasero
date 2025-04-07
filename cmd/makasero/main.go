@@ -53,9 +53,11 @@ func run() error {
 			return err
 		}
 		userInput = prompt
+		fmt.Printf("プロンプトファイルから読み込んだ内容:\n%s\n", userInput)
 	} else if len(args) > 0 {
 		// コマンドライン引数からプロンプトを取得
 		userInput = strings.Join(args, " ")
+		fmt.Printf("コマンドライン引数から取得したプロンプト:\n%s\n", userInput)
 	} else {
 		return fmt.Errorf("プロンプトを指定してください（コマンドライン引数または -f オプション）")
 	}
@@ -226,6 +228,7 @@ func run() error {
 	chat := model.StartChat()
 
 	// メッセージの送信と応答の取得
+	fmt.Printf("\nAIに送信するメッセージ:\n%s\n\n", userInput)
 	resp, err := chat.SendMessage(ctx, genai.Text(userInput))
 	if err != nil {
 		return fmt.Errorf("メッセージの送信に失敗: %v", err)
@@ -243,7 +246,8 @@ func run() error {
 					switch p := part.(type) {
 					case genai.FunctionCall:
 						// 関数呼び出しの場合
-						debugPrint("Function call: %+v\n", p)
+						fmt.Printf("\n関数呼び出し: %s\n", p.Name)
+						fmt.Printf("引数: %+v\n", p.Args)
 						if p.Name == "execCommand" {
 							args, ok := p.Args["args"].([]any)
 							if !ok {
@@ -451,8 +455,7 @@ func run() error {
 						}
 					case genai.Text:
 						// テキスト応答の場合
-						debugPrint("Text response: %s\n", p)
-						fmt.Print(p)
+						fmt.Printf("\nAIからの応答:\n%s\n", p)
 					default:
 						debugPrint("未知の応答タイプ: %T\n", part)
 					}
