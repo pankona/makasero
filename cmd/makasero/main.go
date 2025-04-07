@@ -206,6 +206,7 @@ var (
 	promptFile       = flag.String("f", "", "プロンプトファイル")
 	listSessionsFlag = flag.Bool("ls", false, "利用可能なセッション一覧を表示")
 	sessionID        = flag.String("s", "", "継続するセッションID")
+	showHistory      = flag.String("sh", "", "指定したセッションIDの会話履歴全文を表示")
 )
 
 func debugPrint(format string, args ...interface{}) {
@@ -229,6 +230,37 @@ func readPromptFromFile(filePath string) (string, error) {
 	return string(content), nil
 }
 
+func showSessionHistory(id string) error {
+	session, err := loadSession(id)
+	if err != nil {
+		return fmt.Errorf("セッション %s の読み込みに失敗: %v", id, err)
+	}
+
+	fmt.Printf("セッションID: %s\n", session.ID)
+	fmt.Printf("作成日時: %s\n", session.CreatedAt.Format(time.RFC3339))
+	fmt.Printf("最終更新: %s\n", session.UpdatedAt.Format(time.RFC3339))
+	fmt.Printf("メッセージ数: %d\n\n", len(session.History))
+
+	for i, content := range session.History {
+		fmt.Printf("--- メッセージ %d ---\n", i+1)
+		fmt.Printf("役割: %s\n", content.Role)
+		for _, part := range content.Parts {
+			switch p := part.(type) {
+			case genai.Text:
+				fmt.Printf("%s\n", string(p))
+			case genai.FunctionCall:
+				fmt.Printf("関数呼び出し: %s\n", p.Name)
+				fmt.Printf("引数: %+v\n", p.Args)
+			case genai.FunctionResponse:
+				fmt.Printf("関数レスポンス: %s\n", p.Name)
+				fmt.Printf("結果: %+v\n", p.Response)
+			}
+		}
+		fmt.Println()
+	}
+	return nil
+}
+
 func run() error {
 	// コマンドライン引数の処理
 	flag.Parse()
@@ -236,6 +268,11 @@ func run() error {
 	// セッション一覧表示の処理
 	if *listSessionsFlag {
 		return listSessions()
+	}
+
+	// 会話履歴全文表示の処理
+	if *showHistory != "" {
+		return showSessionHistory(*showHistory)
 	}
 
 	args := flag.Args()
