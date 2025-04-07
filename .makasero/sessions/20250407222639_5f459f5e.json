@@ -1,0 +1,91 @@
+{
+  "id": "20250407222639_5f459f5e",
+  "created_at": "2025-04-07T22:26:39.690470786+09:00",
+  "updated_at": "2025-04-07T22:29:54.363781474+09:00",
+  "history": [
+    {
+      "parts": [
+        {
+          "type": "text",
+          "content": "カレントディレクトリを表示して。タスクが終わったら complete を呼び出してね。"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "type": "text",
+          "content": "はい、カレントディレクトリを表示します。\n\n"
+        },
+        {
+          "type": "function_call",
+          "content": {
+            "Name": "execCommand",
+            "Args": {
+              "command": "pwd"
+            }
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "type": "function_response",
+          "content": {
+            "Name": "execCommand",
+            "Response": {
+              "error": null,
+              "output": "/home/pankona/go/src/github.com/pankona/makasero\n",
+              "success": true
+            }
+          }
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "type": "function_call",
+          "content": {
+            "Name": "complete",
+            "Args": {
+              "message": "カレントディレクトリを表示しました。"
+            }
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "type": "text",
+          "content": "さっき何してもらったっけ？タスクが終わったら complete を呼び出してね。"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "type": "text",
+          "content": "直前のタスクでは、`pwd` コマンドを実行してカレントワーキングディレクトリを表示しました。表示されたディレクトリは `/home/pankona/go/src/github.com/pankona/makasero` でした。\n\n"
+        },
+        {
+          "type": "function_call",
+          "content": {
+            "Name": "complete",
+            "Args": {
+              "message": "直前のタスク内容を説明しました。"
+            }
+          }
+        }
+      ],
+      "role": "model"
+    }
+  ]
+}
