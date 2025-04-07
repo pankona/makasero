@@ -38,9 +38,9 @@ func run() error {
 	}
 
 	// APIキーの取得
-	apiKey := os.Getenv("GOOGLE_API_KEY")
+	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		return fmt.Errorf("GOOGLE_API_KEY 環境変数が設定されていません")
+		return fmt.Errorf("GEMINI_API_KEY 環境変数が設定されていません")
 	}
 
 	// モデル名の取得（デフォルト: gemini-2.5-pro-exp-03-25）
