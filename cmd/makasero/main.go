@@ -201,7 +201,6 @@ func generateSessionID() string {
 }
 
 var (
-	apiKey           = flag.String("key", "", "Gemini API key")
 	debug            = flag.Bool("debug", false, "デバッグモード")
 	promptFile       = flag.String("f", "", "プロンプトファイル")
 	listSessionsFlag = flag.Bool("ls", false, "利用可能なセッション一覧を表示")
@@ -633,10 +632,22 @@ func run() error {
 							shouldBreak = false
 						} else if p.Name == "gitCommit" {
 							// パラメータの取得
-							message := p.Args["message"].(string)
-							commitType := p.Args["type"].(string)
-							scope := p.Args["scope"].(string)
-							description := p.Args["description"].(string)
+							message := ""
+							if p.Args["message"] != nil {
+								message = p.Args["message"].(string)
+							}
+							commitType := ""
+							if p.Args["type"] != nil {
+								commitType = p.Args["type"].(string)
+							}
+							scope := ""
+							if p.Args["scope"] != nil {
+								scope = p.Args["scope"].(string)
+							}
+							description := ""
+							if p.Args["description"] != nil {
+								description = p.Args["description"].(string)
+							}
 
 							// git commitコマンドを実行
 							cmd := exec.Command("git", "commit", "-m", message)
