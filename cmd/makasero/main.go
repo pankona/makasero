@@ -77,6 +77,20 @@ func run() error {
 						Required: []string{"command"},
 					},
 				},
+				{
+					Name:        "complete",
+					Description: "タスクが完了したことを示します",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"message": {
+								Type:        genai.TypeString,
+								Description: "完了メッセージ",
+							},
+						},
+						Required: []string{"message"},
+					},
+				},
 			},
 		},
 	}
@@ -93,46 +107,70 @@ func run() error {
 		return fmt.Errorf("メッセージの送信に失敗: %v", err)
 	}
 
-	// レスポンスの処理
-	for _, cand := range resp.Candidates {
-		if cand.Content != nil {
-			for _, part := range cand.Content.Parts {
-				switch p := part.(type) {
-				case genai.FunctionCall:
-					// 関数呼び出しの場合
-					if p.Name == "execCommand" {
-						args, ok := p.Args["args"].([]interface{})
-						if !ok {
-							args = []interface{}{}
-						}
+	shouldBreak := false
+	for {
+		if shouldBreak {
+			break
+		}
 
-						// コマンドの実行
-						cmd := exec.Command(p.Args["command"].(string))
-						for _, arg := range args {
-							cmd.Args = append(cmd.Args, arg.(string))
-						}
+		shouldBreak = true
 
-						output, err := cmd.CombinedOutput()
-						if err != nil {
-							return fmt.Errorf("コマンドの実行に失敗: %v\n出力: %s", err, output)
-						}
+		// レスポンスの処理
+		if len(resp.Candidates) > 0 {
+			cand := resp.Candidates[0]
+			if cand.Content != nil {
+				for _, part := range cand.Content.Parts {
+					switch p := part.(type) {
+					case genai.FunctionCall:
+						// 関数呼び出しの場合
+						fmt.Printf("[DEBUG] Function call: %+v\n", p)
+						if p.Name == "execCommand" {
+							args, ok := p.Args["args"].([]interface{})
+							if !ok {
+								args = []interface{}{}
+							}
 
-						// 実行結果を FunctionResponse として送信
-						_, err = chat.SendMessage(ctx, genai.FunctionResponse{
-							Name: "execCommand",
-							Response: map[string]interface{}{
-								"success": err == nil,
-								"output":  string(output),
-								"error":   err,
-							},
-						})
-						if err != nil {
-							return fmt.Errorf("実行結果の送信に失敗: %v", err)
+							// コマンドの実行
+							cmd := exec.Command(p.Args["command"].(string))
+							for _, arg := range args {
+								cmd.Args = append(cmd.Args, arg.(string))
+							}
+							fmt.Printf("[DEBUG] Command to execute: %s %v\n", cmd.Path, cmd.Args)
+
+							output, err := cmd.CombinedOutput()
+							fmt.Printf("[DEBUG] Command output: %s\n", output)
+							fmt.Printf("[DEBUG] Command error: %v\n", err)
+							if err != nil {
+								return fmt.Errorf("コマンドの実行に失敗: %v\n出力: %s", err, output)
+							}
+
+							// 実行結果を FunctionResponse として送信
+							resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
+								Name: "execCommand",
+								Response: map[string]interface{}{
+									"success": err == nil,
+									"output":  string(output),
+									"error":   err,
+								},
+							})
+							if err != nil {
+								return fmt.Errorf("実行結果の送信に失敗: %v", err)
+							}
+
+							// 続きのタスクを実行するために、ループを継続
+							shouldBreak = false
+						} else if p.Name == "complete" {
+							// タスク完了の場合
+							fmt.Printf("[DEBUG] Task completed: %s\n", p.Args["message"])
+							return nil
 						}
+					case genai.Text:
+						fmt.Printf("[DEBUG] Text response: %s\n", p)
+						// テキスト応答の場合
+						fmt.Println(p)
+					default:
+						fmt.Printf("[DEBUG] 未知の応答タイプ: %T\n", part)
 					}
-				case genai.Text:
-					// テキスト応答の場合
-					fmt.Println(p)
 				}
 			}
 		}
