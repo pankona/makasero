@@ -78,10 +78,10 @@ func run() error {
 		return fmt.Errorf("GEMINI_API_KEY 環境変数が設定されていません")
 	}
 
-	// モデル名の取得（デフォルト: gemini-2.5-pro-exp-03-25）
+	// モデル名の取得（デフォルト: gemini-2.0-flash-lite）
 	modelName := os.Getenv("MODEL_NAME")
 	if modelName == "" {
-		modelName = "gemini-2.5-pro-exp-03-25"
+		modelName = "gemini-2.0-flash-lite"
 	}
 
 	// コンテキストの作成

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/generative-ai-go/genai"
@@ -221,6 +222,65 @@ var functions = map[string]FunctionDefinition{
 			},
 		},
 		Handler: handleWriteFile,
+	},
+	"create_path": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "create_path",
+			Description: "指定されたパスを作成します（ディレクトリやファイル）",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"path": {
+						Type:        genai.TypeString,
+						Description: "作成するパス",
+					},
+					"type": {
+						Type:        genai.TypeString,
+						Description: "作成するタイプ（'file' または 'directory'）",
+						Enum:        []string{"file", "directory"},
+					},
+					"parents": {
+						Type:        genai.TypeBoolean,
+						Description: "親ディレクトリも作成するかどうか（デフォルト: false）",
+					},
+					"mode": {
+						Type:        genai.TypeInteger,
+						Description: "作成するファイル/ディレクトリのパーミッション（8進数、デフォルト: 0755）",
+					},
+				},
+				Required: []string{"path", "type"},
+			},
+		},
+		Handler: handleCreatePath,
+	},
+	"apply_patch": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "apply_patch",
+			Description: "指定されたパッチを適用します",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"patch": {
+						Type:        genai.TypeString,
+						Description: "適用するパッチの内容",
+					},
+					"path": {
+						Type:        genai.TypeString,
+						Description: "パッチを適用するファイルのパス",
+					},
+					"reverse": {
+						Type:        genai.TypeBoolean,
+						Description: "パッチを逆に適用するかどうか（デフォルト: false）",
+					},
+					"strip": {
+						Type:        genai.TypeInteger,
+						Description: "パスから取り除くディレクトリの数（デフォルト: 0）",
+					},
+				},
+				Required: []string{"patch", "path"},
+			},
+		},
+		Handler: handleApplyPatch,
 	},
 }
 
@@ -591,5 +651,130 @@ func handleWriteFile(ctx context.Context, args map[string]any) (map[string]any, 
 	return map[string]any{
 		"success": true,
 		"path":    path,
+	}, nil
+}
+
+func handleCreatePath(ctx context.Context, args map[string]any) (map[string]any, error) {
+	path, ok := args["path"].(string)
+	if !ok {
+		return nil, fmt.Errorf("path is required")
+	}
+
+	pathType, ok := args["type"].(string)
+	if !ok {
+		return nil, fmt.Errorf("type is required")
+	}
+
+	parents := false
+	if args["parents"] != nil {
+		parents = args["parents"].(bool)
+	}
+
+	mode := os.FileMode(0755)
+	if args["mode"] != nil {
+		switch m := args["mode"].(type) {
+		case float64:
+			mode = os.FileMode(m)
+		case string:
+			// 8進数の文字列を数値に変換
+			var m64 int64
+			if _, err := fmt.Sscanf(m, "%o", &m64); err == nil {
+				mode = os.FileMode(m64)
+			}
+		}
+	}
+
+	var err error
+	if pathType == "directory" {
+		if parents {
+			err = os.MkdirAll(path, mode)
+		} else {
+			err = os.Mkdir(path, mode)
+		}
+	} else if pathType == "file" {
+		if parents {
+			dir := filepath.Dir(path)
+			if err = os.MkdirAll(dir, mode); err != nil {
+				return map[string]any{
+					"success": false,
+					"error":   err.Error(),
+				}, nil
+			}
+		}
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, mode)
+		if err != nil {
+			return map[string]any{
+				"success": false,
+				"error":   err.Error(),
+			}, nil
+		}
+		file.Close()
+	} else {
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("invalid type: %s", pathType),
+		}, nil
+	}
+
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"error":   err.Error(),
+		}, nil
+	}
+
+	return map[string]any{
+		"success": true,
+		"path":    path,
+		"type":    pathType,
+	}, nil
+}
+
+func handleApplyPatch(ctx context.Context, args map[string]any) (map[string]any, error) {
+	patch, ok := args["patch"].(string)
+	if !ok {
+		return nil, fmt.Errorf("patch is required")
+	}
+
+	path, ok := args["path"].(string)
+	if !ok {
+		return nil, fmt.Errorf("path is required")
+	}
+
+	reverse := false
+	if args["reverse"] != nil {
+		reverse = args["reverse"].(bool)
+	}
+
+	strip := 0
+	if args["strip"] != nil {
+		if s, ok := args["strip"].(float64); ok {
+			strip = int(s)
+		}
+	}
+
+	cmd := exec.Command("patch")
+	if reverse {
+		cmd.Args = append(cmd.Args, "-R")
+	}
+	if strip > 0 {
+		cmd.Args = append(cmd.Args, fmt.Sprintf("-p%d", strip))
+	}
+	cmd.Args = append(cmd.Args, path)
+
+	cmd.Stdin = strings.NewReader(patch)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"error":   err.Error(),
+			"output":  string(output),
+		}, nil
+	}
+
+	return map[string]any{
+		"success": true,
+		"path":    path,
+		"output":  string(output),
 	}, nil
 }
