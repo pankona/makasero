@@ -157,7 +157,7 @@ func run() error {
 						fmt.Printf("\n関数呼び出し: %s\n", p.Name)
 						fmt.Printf("引数: %+v\n", p.Args)
 
-						if p.Name == "complete" {
+						if p.Name == "complete" || p.Name == "askQuestion" {
 							session.History = chat.History
 							session.UpdatedAt = time.Now()
 							return saveSession(session)

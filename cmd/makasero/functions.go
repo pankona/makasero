@@ -282,6 +282,51 @@ var functions = map[string]FunctionDefinition{
 		},
 		Handler: handleApplyPatch,
 	},
+	"getGitHubPRDiff": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "getGitHubPRDiff",
+			Description: "GitHubのプルリクエストのdiffを取得します",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"repository": {
+						Type:        genai.TypeString,
+						Description: "リポジトリ名（例: pankona/makasero）",
+					},
+					"prNumber": {
+						Type:        genai.TypeInteger,
+						Description: "プルリクエスト番号",
+					},
+				},
+				Required: []string{"repository", "prNumber"},
+			},
+		},
+		Handler: handleGetGitHubPRDiff,
+	},
+	"askQuestion": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "askQuestion",
+			Description: "ユーザーに質問を投げかけます",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"question": {
+						Type:        genai.TypeString,
+						Description: "ユーザーへの質問内容",
+					},
+					"options": {
+						Type:        genai.TypeArray,
+						Description: "選択肢（オプション）",
+						Items: &genai.Schema{
+							Type: genai.TypeString,
+						},
+					},
+				},
+				Required: []string{"question"},
+			},
+		},
+		Handler: handleAskQuestion,
+	},
 }
 
 func handleExecCommand(ctx context.Context, args map[string]any) (map[string]any, error) {
@@ -777,4 +822,36 @@ func handleApplyPatch(ctx context.Context, args map[string]any) (map[string]any,
 		"path":    path,
 		"output":  string(output),
 	}, nil
+}
+
+func handleGetGitHubPRDiff(ctx context.Context, args map[string]any) (map[string]any, error) {
+	repository, ok := args["repository"].(string)
+	if !ok {
+		return nil, fmt.Errorf("repository is required")
+	}
+
+	prNumber, ok := args["prNumber"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("prNumber is required")
+	}
+
+	cmd := exec.Command("gh", "pr", "diff", fmt.Sprintf("%d", int(prNumber)), "--repo", repository)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"output":  string(output),
+			"error":   err.Error(),
+		}, nil
+	}
+
+	return map[string]any{
+		"success": true,
+		"diff":    string(output),
+	}, nil
+}
+
+func handleAskQuestion(ctx context.Context, args map[string]any) (map[string]any, error) {
+	// 呼び出されないので実装しなくてよい
+	return nil, nil
 }
