@@ -160,7 +160,11 @@ func run() error {
 						if p.Name == "complete" || p.Name == "askQuestion" {
 							session.History = chat.History
 							session.UpdatedAt = time.Now()
-							return saveSession(session)
+							if err := saveSession(session); err != nil {
+								return err
+							}
+							fmt.Printf("\nセッションID: %s\n", session.ID)
+							return nil
 						}
 
 						fn, exists := functions[p.Name]
