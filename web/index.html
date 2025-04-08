@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Makasero Web</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .session {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        .session:hover {
+            background-color: #f5f5f5;
+        }
+        .session-id {
+            font-weight: bold;
+            color: #333;
+        }
+        .session-meta {
+            color: #666;
+            font-size: 0.9em;
+            margin: 5px 0;
+        }
+        .session-prompt {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .chat-container {
+            display: none;
+            margin-top: 20px;
+        }
+        .chat-message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .chat-message.user {
+            background-color: #e3f2fd;
+            margin-left: 20%;
+        }
+        .chat-message.assistant {
+            background-color: #f5f5f5;
+            margin-right: 20%;
+        }
+        .back-button {
+            margin-bottom: 20px;
+            padding: 8px 16px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .back-button:hover {
+            background-color: #e0e0e0;
+        }
+        .chat-input-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            background-color: white;
+            border-top: 1px solid #ddd;
+        }
+        .chat-input-form {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        .chat-submit {
+            padding: 10px 20px;
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .chat-submit:hover {
+            background-color: #1976d2;
+        }
+        .chat-submit:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #chat-messages {
+            margin-bottom: 100px;
+        }
+        .new-session-form {
+            margin-bottom: 20px;
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .new-session-form textarea {
+            width: 100%;
+            min-height: 100px;
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1em;
+            resize: vertical;
+        }
+        .error-message {
+            color: #f44336;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #ffebee;
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="sessions-view">
+        <h1>Makasero Sessions</h1>
+        <div class="new-session-form">
+            <h2>新しいセッションを作成</h2>
+            <form onsubmit="handleCreateSession(event)">
+                <textarea id="prompt-input" placeholder="プロンプトを入力..." required></textarea>
+                <button type="submit" class="chat-submit" id="create-button">作成</button>
+            </form>
+            <div id="create-error" class="error-message"></div>
+        </div>
+        <div id="sessions"></div>
+    </div>
+
+    <div id="chat-view" class="chat-container">
+        <button class="back-button" onclick="showSessions()">← セッション一覧に戻る</button>
+        <h1 id="chat-title"></h1>
+        <div id="chat-messages"></div>
+        <div class="chat-input-container">
+            <form class="chat-input-form" onsubmit="handleSubmit(event)">
+                <input type="text" class="chat-input" id="message-input" placeholder="メッセージを入力..." required>
+                <button type="submit" class="chat-submit" id="submit-button">送信</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentSession = null;
+
+        async function fetchSessions() {
+            try {
+                const response = await fetch('/api/sessions');
+                const data = await response.json();
+                
+                if (!data.success) {
+                    console.error('Failed to fetch sessions:', data.error);
+                    return;
+                }
+
+                const sessionsDiv = document.getElementById('sessions');
+                sessionsDiv.innerHTML = '';
+
+                // セッション情報をパース
+                const sessions = data.data.split('\n\n').filter(s => s.trim());
+                
+                sessions.forEach(sessionText => {
+                    const session = parseSession(sessionText);
+                    if (session) {
+                        const sessionElement = createSessionElement(session);
+                        sessionsDiv.appendChild(sessionElement);
+                    }
+                });
+            } catch (error) {
+                console.error('Error fetching sessions:', error);
+            }
+        }
+
+        async function handleCreateSession(event) {
+            event.preventDefault();
+            const input = document.getElementById('prompt-input');
+            const button = document.getElementById('create-button');
+            const errorDiv = document.getElementById('create-error');
+            const prompt = input.value.trim();
+
+            if (!prompt) return;
+
+            // 送信中は入力を無効化
+            input.disabled = true;
+            button.disabled = true;
+            errorDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ prompt }),
+                });
+
+                const data = await response.json();
+                if (!data.success) {
+                    errorDiv.textContent = `セッションの作成に失敗しました: ${data.error.message}`;
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                // セッション作成成功
+                input.value = '';
+                await fetchSessions();
+            } catch (error) {
+                console.error('Error creating session:', error);
+                errorDiv.textContent = 'セッションの作成中にエラーが発生しました';
+                errorDiv.style.display = 'block';
+            } finally {
+                // 入力を再度有効化
+                input.disabled = false;
+                button.disabled = false;
+            }
+        }
+
+        function parseSession(text) {
+            const lines = text.split('\n');
+            const session = {};
+            
+            lines.forEach(line => {
+                if (line.startsWith('Session ID:')) {
+                    session.id = line.split(': ')[1];
+                } else if (line.startsWith('Created:')) {
+                    session.createdAt = line.split(': ')[1];
+                } else if (line.startsWith('Messages:')) {
+                    session.messages = parseInt(line.split(': ')[1]);
+                } else if (line.startsWith('初期プロンプト:')) {
+                    session.prompt = line.split(': ')[1];
+                }
+            });
+
+            return session.id ? session : null;
+        }
+
+        function createSessionElement(session) {
+            const div = document.createElement('div');
+            div.className = 'session';
+            div.onclick = () => showChat(session);
+            
+            div.innerHTML = `
+                <div class="session-id">${session.id}</div>
+                <div class="session-meta">
+                    Created: ${session.createdAt}<br>
+                    Messages: ${session.messages}
+                </div>
+                <div class="session-prompt">
+                    ${session.prompt}
+                </div>
+            `;
+            
+            return div;
+        }
+
+        async function showChat(session) {
+            currentSession = session;
+            document.getElementById('sessions-view').style.display = 'none';
+            document.getElementById('chat-view').style.display = 'block';
+            document.getElementById('chat-title').textContent = `Session: ${session.id}`;
+            document.getElementById('message-input').value = '';
+
+            try {
+                const response = await fetch(`/api/sessions/${session.id}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    console.error('Failed to fetch chat history:', data.error);
+                    return;
+                }
+
+                const chatMessages = document.getElementById('chat-messages');
+                chatMessages.innerHTML = '';
+
+                // チャット履歴をパースして表示
+                const messages = data.data.split('\n\n').filter(m => m.trim());
+                messages.forEach(message => {
+                    const messageElement = createMessageElement(message);
+                    if (messageElement) {
+                        chatMessages.appendChild(messageElement);
+                    }
+                });
+
+                // 最新のメッセージまでスクロール
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            } catch (error) {
+                console.error('Error fetching chat history:', error);
+            }
+        }
+
+        function createMessageElement(message) {
+            const lines = message.split('\n');
+            if (lines.length < 2) return null;
+
+            const div = document.createElement('div');
+            const role = lines[0].startsWith('user:') ? 'user' : 'assistant';
+            const content = lines.slice(1).join('\n');
+
+            div.className = `chat-message ${role}`;
+            div.innerHTML = `
+                <div class="message-role">${role}</div>
+                <div class="message-content">${content}</div>
+            `;
+
+            return div;
+        }
+
+        function showSessions() {
+            currentSession = null;
+            document.getElementById('sessions-view').style.display = 'block';
+            document.getElementById('chat-view').style.display = 'none';
+            fetchSessions(); // セッション一覧を更新
+        }
+
+        async function handleSubmit(event) {
+            event.preventDefault();
+            const input = document.getElementById('message-input');
+            const button = document.getElementById('submit-button');
+            const message = input.value.trim();
+
+            if (!message || !currentSession) return;
+
+            // 送信中は入力を無効化
+            input.disabled = true;
+            button.disabled = true;
+
+            try {
+                const response = await fetch(`/api/sessions/${currentSession.id}/message`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message }),
+                });
+
+                const data = await response.json();
+                if (!data.success) {
+                    console.error('Failed to send message:', data.error);
+                    return;
+                }
+
+                // メッセージ送信成功後、チャット履歴を更新
+                input.value = '';
+                await showChat(currentSession);
+            } catch (error) {
+                console.error('Error sending message:', error);
+            } finally {
+                // 入力を再度有効化
+                input.disabled = false;
+                button.disabled = false;
+                input.focus();
+            }
+        }
+
+        // ページ読み込み時にセッション一覧を取得
+        fetchSessions();
+    </script>
+</body>
+</html> 
