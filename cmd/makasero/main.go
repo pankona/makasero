@@ -199,5 +199,12 @@ func run() error {
 		}
 	}
 
+	session.History = chat.History
+	session.UpdatedAt = time.Now()
+	if err := saveSession(session); err != nil {
+		return err
+	}
+	fmt.Printf("\nセッションID: %s\n", session.ID)
+
 	return nil
 }
