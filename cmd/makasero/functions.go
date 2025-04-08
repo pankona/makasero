@@ -169,9 +169,9 @@ var functions = map[string]FunctionDefinition{
 		},
 		Handler: handleComplete,
 	},
-	"read_file": {
+	"readFile": {
 		Declaration: &genai.FunctionDeclaration{
-			Name:        "read_file",
+			Name:        "readFile",
 			Description: "指定されたファイルの内容を読み取ります",
 			Parameters: &genai.Schema{
 				Type: genai.TypeObject,
@@ -180,11 +180,11 @@ var functions = map[string]FunctionDefinition{
 						Type:        genai.TypeString,
 						Description: "読み取るファイルのパス",
 					},
-					"start_line": {
+					"startLine": {
 						Type:        genai.TypeInteger,
 						Description: "読み取り開始行（1から始まる、省略時は1行目から）",
 					},
-					"end_line": {
+					"endLine": {
 						Type:        genai.TypeInteger,
 						Description: "読み取り終了行（1から始まる、省略時は最終行まで）",
 					},
@@ -194,9 +194,9 @@ var functions = map[string]FunctionDefinition{
 		},
 		Handler: handleReadFile,
 	},
-	"write_file": {
+	"writeFile": {
 		Declaration: &genai.FunctionDeclaration{
-			Name:        "write_file",
+			Name:        "writeFile",
 			Description: "指定されたファイルに内容を書き込みます",
 			Parameters: &genai.Schema{
 				Type: genai.TypeObject,
@@ -213,7 +213,7 @@ var functions = map[string]FunctionDefinition{
 						Type:        genai.TypeBoolean,
 						Description: "追記モードかどうか（デフォルト: false）",
 					},
-					"start_line": {
+					"startLine": {
 						Type:        genai.TypeInteger,
 						Description: "書き込み開始行（1から始まる、省略時はファイルの末尾）",
 					},
@@ -223,9 +223,9 @@ var functions = map[string]FunctionDefinition{
 		},
 		Handler: handleWriteFile,
 	},
-	"create_path": {
+	"createPath": {
 		Declaration: &genai.FunctionDeclaration{
-			Name:        "create_path",
+			Name:        "createPath",
 			Description: "指定されたパスを作成します（ディレクトリやファイル）",
 			Parameters: &genai.Schema{
 				Type: genai.TypeObject,
@@ -497,15 +497,15 @@ func handleReadFile(ctx context.Context, args map[string]any) (map[string]any, e
 	}
 
 	startLine := 1
-	if args["start_line"] != nil {
-		if sl, ok := args["start_line"].(float64); ok {
+	if args["startLine"] != nil {
+		if sl, ok := args["startLine"].(float64); ok {
 			startLine = int(sl)
 		}
 	}
 
 	endLine := -1 // -1 means read until the end
-	if args["end_line"] != nil {
-		if el, ok := args["end_line"].(float64); ok {
+	if args["endLine"] != nil {
+		if el, ok := args["endLine"].(float64); ok {
 			endLine = int(el)
 		}
 	}
@@ -529,7 +529,7 @@ func handleReadFile(ctx context.Context, args map[string]any) (map[string]any, e
 	if startLine < 1 || startLine > len(lines) {
 		return map[string]any{
 			"success": false,
-			"error":   fmt.Sprintf("start_line %d is out of range (1-%d)", startLine, len(lines)),
+			"error":   fmt.Sprintf("startLine %d is out of range (1-%d)", startLine, len(lines)),
 		}, nil
 	}
 
@@ -538,18 +538,18 @@ func handleReadFile(ctx context.Context, args map[string]any) (map[string]any, e
 	} else if endLine < startLine || endLine > len(lines) {
 		return map[string]any{
 			"success": false,
-			"error":   fmt.Sprintf("end_line %d is out of range (%d-%d)", endLine, startLine, len(lines)),
+			"error":   fmt.Sprintf("endLine %d is out of range (%d-%d)", endLine, startLine, len(lines)),
 		}, nil
 	}
 
 	selectedLines := lines[startLine-1 : endLine]
 	return map[string]any{
-		"success":     true,
-		"content":     strings.Join(selectedLines, "\n"),
-		"path":        path,
-		"start_line":  startLine,
-		"end_line":    endLine,
-		"total_lines": len(lines),
+		"success":    true,
+		"content":    strings.Join(selectedLines, "\n"),
+		"path":       path,
+		"startLine":  startLine,
+		"endLine":    endLine,
+		"totalLines": len(lines),
 	}, nil
 }
 
@@ -570,8 +570,8 @@ func handleWriteFile(ctx context.Context, args map[string]any) (map[string]any, 
 	}
 
 	startLine := -1 // -1 means append to the end
-	if args["start_line"] != nil {
-		if sl, ok := args["start_line"].(float64); ok {
+	if args["startLine"] != nil {
+		if sl, ok := args["startLine"].(float64); ok {
 			startLine = int(sl)
 		}
 	}
@@ -597,7 +597,7 @@ func handleWriteFile(ctx context.Context, args map[string]any) (map[string]any, 
 		if startLine < 1 || startLine > len(lines) {
 			return map[string]any{
 				"success": false,
-				"error":   fmt.Sprintf("start_line %d is out of range (1-%d)", startLine, len(lines)),
+				"error":   fmt.Sprintf("startLine %d is out of range (1-%d)", startLine, len(lines)),
 			}, nil
 		}
 
