@@ -1,0 +1,286 @@
+package client // import "github.com/mark3labs/mcp-go/client"
+
+Package client provides MCP (Model Control Protocol) client implementations.
+
+TYPES
+
+type ClientOption func(*SSEMCPClient)
+
+func WithHeaders(headers map[string]string) ClientOption
+
+func WithSSEReadTimeout(timeout time.Duration) ClientOption
+
+type MCPClient interface {
+	// Initialize sends the initial connection request to the server
+	Initialize(
+		ctx context.Context,
+		request mcp.InitializeRequest,
+	) (*mcp.InitializeResult, error)
+
+	// Ping checks if the server is alive
+	Ping(ctx context.Context) error
+
+	// ListResources requests a list of available resources from the server
+	ListResources(
+		ctx context.Context,
+		request mcp.ListResourcesRequest,
+	) (*mcp.ListResourcesResult, error)
+
+	// ListResourceTemplates requests a list of available resource templates from the server
+	ListResourceTemplates(
+		ctx context.Context,
+		request mcp.ListResourceTemplatesRequest,
+	) (*mcp.ListResourceTemplatesResult,
+		error)
+
+	// ReadResource reads a specific resource from the server
+	ReadResource(
+		ctx context.Context,
+		request mcp.ReadResourceRequest,
+	) (*mcp.ReadResourceResult, error)
+
+	// Subscribe requests notifications for changes to a specific resource
+	Subscribe(ctx context.Context, request mcp.SubscribeRequest) error
+
+	// Unsubscribe cancels notifications for a specific resource
+	Unsubscribe(ctx context.Context, request mcp.UnsubscribeRequest) error
+
+	// ListPrompts requests a list of available prompts from the server
+	ListPrompts(
+		ctx context.Context,
+		request mcp.ListPromptsRequest,
+	) (*mcp.ListPromptsResult, error)
+
+	// GetPrompt retrieves a specific prompt from the server
+	GetPrompt(
+		ctx context.Context,
+		request mcp.GetPromptRequest,
+	) (*mcp.GetPromptResult, error)
+
+	// ListTools requests a list of available tools from the server
+	ListTools(
+		ctx context.Context,
+		request mcp.ListToolsRequest,
+	) (*mcp.ListToolsResult, error)
+
+	// CallTool invokes a specific tool on the server
+	CallTool(
+		ctx context.Context,
+		request mcp.CallToolRequest,
+	) (*mcp.CallToolResult, error)
+
+	// SetLevel sets the logging level for the server
+	SetLevel(ctx context.Context, request mcp.SetLevelRequest) error
+
+	// Complete requests completion options for a given argument
+	Complete(
+		ctx context.Context,
+		request mcp.CompleteRequest,
+	) (*mcp.CompleteResult, error)
+
+	// Close client connection and cleanup resources
+	Close() error
+
+	// OnNotification registers a handler for notifications
+	OnNotification(handler func(notification mcp.JSONRPCNotification))
+}
+    MCPClient represents an MCP client interface
+
+type RPCResponse struct {
+	Error    *string
+	Response *json.RawMessage
+}
+
+type SSEMCPClient struct {
+	// Has unexported fields.
+}
+    SSEMCPClient implements the MCPClient interface using Server-Sent Events
+    (SSE). It maintains a persistent HTTP connection to receive server-pushed
+    events while sending requests over regular HTTP POST calls. The client
+    handles automatic reconnection and message routing between requests and
+    responses.
+
+func NewSSEMCPClient(baseURL string, options ...ClientOption) (*SSEMCPClient, error)
+    NewSSEMCPClient creates a new SSE-based MCP client with the given base URL.
+    Returns an error if the URL is invalid.
+
+func (c *SSEMCPClient) CallTool(
+	ctx context.Context,
+	request mcp.CallToolRequest,
+) (*mcp.CallToolResult, error)
+
+func (c *SSEMCPClient) Close() error
+    Close shuts down the SSE client connection and cleans up any pending
+    responses. Returns an error if the shutdown process fails.
+
+func (c *SSEMCPClient) Complete(
+	ctx context.Context,
+	request mcp.CompleteRequest,
+) (*mcp.CompleteResult, error)
+
+func (c *SSEMCPClient) GetEndpoint() *url.URL
+    GetEndpoint returns the current endpoint URL for the SSE connection.
+
+func (c *SSEMCPClient) GetPrompt(
+	ctx context.Context,
+	request mcp.GetPromptRequest,
+) (*mcp.GetPromptResult, error)
+
+func (c *SSEMCPClient) Initialize(
+	ctx context.Context,
+	request mcp.InitializeRequest,
+) (*mcp.InitializeResult, error)
+
+func (c *SSEMCPClient) ListPrompts(
+	ctx context.Context,
+	request mcp.ListPromptsRequest,
+) (*mcp.ListPromptsResult, error)
+
+func (c *SSEMCPClient) ListResourceTemplates(
+	ctx context.Context,
+	request mcp.ListResourceTemplatesRequest,
+) (*mcp.ListResourceTemplatesResult, error)
+
+func (c *SSEMCPClient) ListResources(
+	ctx context.Context,
+	request mcp.ListResourcesRequest,
+) (*mcp.ListResourcesResult, error)
+
+func (c *SSEMCPClient) ListTools(
+	ctx context.Context,
+	request mcp.ListToolsRequest,
+) (*mcp.ListToolsResult, error)
+
+func (c *SSEMCPClient) OnNotification(
+	handler func(notification mcp.JSONRPCNotification),
+)
+    OnNotification registers a handler function to be called when notifications
+    are received. Multiple handlers can be registered and will be called in the
+    order they were added.
+
+func (c *SSEMCPClient) Ping(ctx context.Context) error
+
+func (c *SSEMCPClient) ReadResource(
+	ctx context.Context,
+	request mcp.ReadResourceRequest,
+) (*mcp.ReadResourceResult, error)
+
+func (c *SSEMCPClient) SetLevel(
+	ctx context.Context,
+	request mcp.SetLevelRequest,
+) error
+
+func (c *SSEMCPClient) Start(ctx context.Context) error
+    Start initiates the SSE connection to the server and waits for the endpoint
+    information. Returns an error if the connection fails or times out waiting
+    for the endpoint.
+
+func (c *SSEMCPClient) Subscribe(
+	ctx context.Context,
+	request mcp.SubscribeRequest,
+) error
+
+func (c *SSEMCPClient) Unsubscribe(
+	ctx context.Context,
+	request mcp.UnsubscribeRequest,
+) error
+
+type StdioMCPClient struct {
+	// Has unexported fields.
+}
+    StdioMCPClient implements the MCPClient interface using stdio communication.
+    It launches a subprocess and communicates with it via standard input/output
+    streams using JSON-RPC messages. The client handles message routing between
+    requests and responses, and supports asynchronous notifications.
+
+func NewStdioMCPClient(
+	command string,
+	env []string,
+	args ...string,
+) (*StdioMCPClient, error)
+    NewStdioMCPClient creates a new stdio-based MCP client that communicates
+    with a subprocess. It launches the specified command with given arguments
+    and sets up stdin/stdout pipes for communication. Returns an error if the
+    subprocess cannot be started or the pipes cannot be created.
+
+func (c *StdioMCPClient) CallTool(
+	ctx context.Context,
+	request mcp.CallToolRequest,
+) (*mcp.CallToolResult, error)
+
+func (c *StdioMCPClient) Close() error
+    Close shuts down the stdio client, closing the stdin pipe and waiting for
+    the subprocess to exit. Returns an error if there are issues closing stdin
+    or waiting for the subprocess to terminate.
+
+func (c *StdioMCPClient) Complete(
+	ctx context.Context,
+	request mcp.CompleteRequest,
+) (*mcp.CompleteResult, error)
+
+func (c *StdioMCPClient) GetPrompt(
+	ctx context.Context,
+	request mcp.GetPromptRequest,
+) (*mcp.GetPromptResult, error)
+
+func (c *StdioMCPClient) Initialize(
+	ctx context.Context,
+	request mcp.InitializeRequest,
+) (*mcp.InitializeResult, error)
+
+func (c *StdioMCPClient) ListPrompts(
+	ctx context.Context,
+	request mcp.ListPromptsRequest,
+) (*mcp.ListPromptsResult, error)
+
+func (c *StdioMCPClient) ListResourceTemplates(
+	ctx context.Context,
+	request mcp.ListResourceTemplatesRequest,
+) (*mcp.
+	ListResourceTemplatesResult, error)
+
+func (c *StdioMCPClient) ListResources(
+	ctx context.Context,
+	request mcp.ListResourcesRequest,
+) (*mcp.
+	ListResourcesResult, error)
+
+func (c *StdioMCPClient) ListTools(
+	ctx context.Context,
+	request mcp.ListToolsRequest,
+) (*mcp.ListToolsResult, error)
+
+func (c *StdioMCPClient) OnNotification(
+	handler func(notification mcp.JSONRPCNotification),
+)
+    OnNotification registers a handler function to be called when notifications
+    are received. Multiple handlers can be registered and will be called in the
+    order they were added.
+
+func (c *StdioMCPClient) Ping(ctx context.Context) error
+
+func (c *StdioMCPClient) ReadResource(
+	ctx context.Context,
+	request mcp.ReadResourceRequest,
+) (*mcp.ReadResourceResult,
+	error)
+
+func (c *StdioMCPClient) SetLevel(
+	ctx context.Context,
+	request mcp.SetLevelRequest,
+) error
+
+func (c *StdioMCPClient) Stderr() io.Reader
+    Stderr returns a reader for the stderr output of the subprocess. This can be
+    used to capture error messages or logs from the subprocess.
+
+func (c *StdioMCPClient) Subscribe(
+	ctx context.Context,
+	request mcp.SubscribeRequest,
+) error
+
+func (c *StdioMCPClient) Unsubscribe(
+	ctx context.Context,
+	request mcp.UnsubscribeRequest,
+) error
+
