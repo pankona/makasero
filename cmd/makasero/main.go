@@ -131,7 +131,7 @@ func run() error {
 		functions[fn.Declaration.Name] = fn
 	}
 
-	// モデルに fucntion calling 設定
+	// モデルに function calling 設定
 	model.Tools = []*genai.Tool{
 		{FunctionDeclarations: lo.Map(mcpFuncDecls, func(fn FunctionDefinition, _ int) *genai.FunctionDeclaration {
 			return fn.Declaration
