@@ -4,24 +4,21 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/samber/lo"
 	"google.golang.org/api/option"
 )
 
 var (
-	debug      = flag.Bool("debug", false, "デバッグモード")
-	promptFile = flag.String("f", "", "プロンプトファイル")
+	debug      = flag.Bool("debug", false, "debug mode")
+	promptFile = flag.String("f", "", "prompt file")
 )
-
-func debugPrint(format string, args ...any) {
-	if *debug {
-		fmt.Printf("[DEBUG] "+format, args...)
-	}
-}
 
 func main() {
 	if err := run(); err != nil {
@@ -33,7 +30,7 @@ func main() {
 func readPromptFromFile(filePath string) (string, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return "", fmt.Errorf("プロンプトファイルの読み込みに失敗: %v", err)
+		return "", fmt.Errorf("failed to read prompt file: %v", err)
 	}
 	return string(content), nil
 }
@@ -41,6 +38,40 @@ func readPromptFromFile(filePath string) (string, error) {
 func run() error {
 	// コマンドライン引数の処理
 	flag.Parse()
+
+	// MCP クライアントの初期化
+	var err error
+	mcpClient, err := NewMCPClient(ServerCmd{
+		Cmd:  "claude",
+		Args: []string{"mcp", "serve"},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create MCP client: %v", err)
+	}
+	// いったん無効化する。MCP Server プロセスをキルする必要があるが今はそういう動きをしてくれないっぽい
+	// defer mcpClient.Close(context.Background())
+
+	// 標準エラー出力のキャプチャ
+	go io.Copy(os.Stderr, mcpClient.Stderr())
+
+	// 初期化リクエストの送信
+	initResult, err := mcpClient.Initialize(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to initialize MCP client: %v", err)
+	}
+
+	// 初期化リクエストの結果をデバッグ出力。
+	// TODO: これは　LLM に食わせるのが良いと思われる
+	fmt.Printf("claude mcp server initialize result: %s\n", initResult)
+
+	// 利用可能なツールの取得と変換
+	mcpFuncDecls, err := mcpClient.GenerateFunctionDefinisions(context.Background(), "claude")
+	if err != nil {
+		return fmt.Errorf("failed to generate claude MCP tools: %v", err)
+	}
+
+	// 通知ハンドラの設定
+	mcpClient.OnNotification(handleNotification)
 
 	// セッション一覧表示の処理
 	if *listSessionsFlag {
@@ -63,19 +94,17 @@ func run() error {
 			return err
 		}
 		userInput = prompt
-		fmt.Printf("プロンプトファイルから読み込んだ内容:\n%s\n", userInput)
 	} else if len(args) > 0 {
 		// コマンドライン引数からプロンプトを取得
 		userInput = strings.Join(args, " ")
-		fmt.Printf("コマンドライン引数から取得したプロンプト:\n%s\n", userInput)
 	} else {
-		return fmt.Errorf("プロンプトを指定してください（コマンドライン引数または -f オプション）")
+		return fmt.Errorf("Please specify a prompt (command line arguments or -f option)")
 	}
 
 	// APIキーの取得
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		return fmt.Errorf("GEMINI_API_KEY 環境変数が設定されていません")
+		return fmt.Errorf("GEMINI_API_KEY environment variable is not set")
 	}
 
 	// モデル名の取得（デフォルト: gemini-2.0-flash-lite）
@@ -90,7 +119,7 @@ func run() error {
 	// クライアントの初期化
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
-		return fmt.Errorf("クライアントの初期化に失敗: %v", err)
+		return fmt.Errorf("failed to initialize client: %v", err)
 	}
 	defer client.Close()
 
@@ -98,16 +127,21 @@ func run() error {
 	model := client.GenerativeModel(modelName)
 
 	// 関数定義から FunctionDeclaration のスライスを作成
-	var declarations []*genai.FunctionDeclaration
-	for _, fn := range functions {
-		declarations = append(declarations, fn.Declaration)
+	for _, fn := range mcpFuncDecls {
+		functions[fn.Declaration.Name] = fn
 	}
 
-	// モデルに設定
+	// モデルに function calling 設定
 	model.Tools = []*genai.Tool{
-		{
-			FunctionDeclarations: declarations,
-		},
+		{FunctionDeclarations: lo.Map(mcpFuncDecls, func(fn FunctionDefinition, _ int) *genai.FunctionDeclaration {
+			return fn.Declaration
+		})},
+	}
+
+	// list tools
+	fmt.Printf("declared tools: %d\n", len(functions))
+	for _, tool := range functions {
+		fmt.Printf("%s\n", tool.Declaration.Name)
 	}
 
 	// セッションの読み込み
@@ -132,14 +166,16 @@ func run() error {
 		chat.History = session.History
 	}
 
+	fmt.Println("\n--- Start session ---")
+
 	// メッセージの送信と応答の取得
-	fmt.Printf("\nAIに送信するメッセージ:\n%s\n\n", userInput)
+	fmt.Printf("\n🗣️ Sending message to AI:\n%s\n", strings.TrimSpace(userInput))
 	resp, err := chat.SendMessage(ctx, genai.Text(userInput))
 	if err != nil {
 		// エラーが発生しても、それまでの履歴は保存
 		session.History = chat.History
 		saveSession(session)
-		return fmt.Errorf("メッセージの送信に失敗: %v", err)
+		return fmt.Errorf("failed to send message to AI: %v", err)
 	}
 
 	var shouldBreak bool
@@ -153,17 +189,16 @@ func run() error {
 				for _, part := range cand.Content.Parts {
 					switch p := part.(type) {
 					case genai.FunctionCall:
-						// 関数呼び出しの場合
-						fmt.Printf("\n関数呼び出し: %s\n", p.Name)
-						fmt.Printf("引数: %+v\n", p.Args)
+						fmt.Printf("\n🔧 AI uses function calling: %s\n", p.Name)
 
+						// 関数呼び出しの場合
 						if p.Name == "complete" || p.Name == "askQuestion" {
 							session.History = chat.History
 							session.UpdatedAt = time.Now()
 							if err := saveSession(session); err != nil {
 								return err
 							}
-							fmt.Printf("\nセッションID: %s\n", session.ID)
+							fmt.Printf("Session ID: %s\n", session.ID)
 							return nil
 						}
 
@@ -183,28 +218,41 @@ func run() error {
 							Response: result,
 						})
 						if err != nil {
-							return fmt.Errorf("実行結果の送信に失敗: %v", err)
+							return fmt.Errorf("failed to send function response: %v", err)
 						}
 
 						// complete 関数以外の場合は続きのタスクを実行するために、ループを継続
 						shouldBreak = false
 					case genai.Text:
 						// テキスト応答の場合
-						fmt.Printf("\nAIからの応答:\n%s\n", p)
+						fmt.Printf("\n🤖 Response from AI:\n%s\n", strings.TrimSpace(string(p)))
 					default:
-						debugPrint("未知の応答タイプ: %T\n", part)
+						fmt.Printf("unknown response type: %T\n", part)
 					}
 				}
+			} else {
+				fmt.Printf("response content is nil\n")
 			}
+		} else {
+			fmt.Printf("no response candidates\n")
 		}
 	}
 
+	fmt.Println("\n--- Finish session ---")
+
+	fmt.Printf("Saving session\n")
 	session.History = chat.History
 	session.UpdatedAt = time.Now()
 	if err := saveSession(session); err != nil {
 		return err
 	}
-	fmt.Printf("\nセッションID: %s\n", session.ID)
+	fmt.Printf("Session ID: %s\n", session.ID)
 
 	return nil
+}
+
+// 通知ハンドラ
+// TODO: まともに実装する
+func handleNotification(notification mcp.JSONRPCNotification) {
+	fmt.Printf("Received notification: %v\n", notification)
 }

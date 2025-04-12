@@ -19,139 +19,142 @@ type FunctionDefinition struct {
 }
 
 var functions = map[string]FunctionDefinition{
-	"execCommand": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "execCommand",
-			Description: "ターミナルコマンドを実行し、その結果を返します",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"command": {
-						Type:        genai.TypeString,
-						Description: "実行するコマンド",
+	/*
+			"execCommand": {
+				Declaration: &genai.FunctionDeclaration{
+					Name:        "execCommand",
+					Description: "ターミナルコマンドを実行し、その結果を返します",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"command": {
+								Type:        genai.TypeString,
+								Description: "実行するコマンド",
+							},
+							"args": {
+								Type:        genai.TypeArray,
+								Description: "コマンドの引数",
+								Items: &genai.Schema{
+									Type: genai.TypeString,
+								},
+							},
+						},
+						Required: []string{"command"},
 					},
-					"args": {
-						Type:        genai.TypeArray,
-						Description: "コマンドの引数",
-						Items: &genai.Schema{
-							Type: genai.TypeString,
+				},
+				Handler: handleExecCommand,
+			},
+
+		"getGitHubIssue": {
+			Declaration: &genai.FunctionDeclaration{
+				Name:        "getGitHubIssue",
+				Description: "GitHubのIssueの詳細を取得します",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"repository": {
+							Type:        genai.TypeString,
+							Description: "リポジトリ名（例: pankona/makasero）",
+						},
+						"issueNumber": {
+							Type:        genai.TypeInteger,
+							Description: "Issue番号",
+						},
+					},
+					Required: []string{"repository", "issueNumber"},
+				},
+			},
+			Handler: handleGetGitHubIssue,
+		},
+		"gitStatus": {
+			Declaration: &genai.FunctionDeclaration{
+				Name:        "gitStatus",
+				Description: "Gitのステータスを表示します",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"path": {
+							Type:        genai.TypeString,
+							Description: "ステータスを確認するパス（オプション）",
 						},
 					},
 				},
-				Required: []string{"command"},
 			},
+			Handler: handleGitStatus,
 		},
-		Handler: handleExecCommand,
-	},
-	"getGitHubIssue": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "getGitHubIssue",
-			Description: "GitHubのIssueの詳細を取得します",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"repository": {
-						Type:        genai.TypeString,
-						Description: "リポジトリ名（例: pankona/makasero）",
-					},
-					"issueNumber": {
-						Type:        genai.TypeInteger,
-						Description: "Issue番号",
-					},
-				},
-				Required: []string{"repository", "issueNumber"},
-			},
-		},
-		Handler: handleGetGitHubIssue,
-	},
-	"gitStatus": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "gitStatus",
-			Description: "Gitのステータスを表示します",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"path": {
-						Type:        genai.TypeString,
-						Description: "ステータスを確認するパス（オプション）",
-					},
-				},
-			},
-		},
-		Handler: handleGitStatus,
-	},
-	"gitAdd": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "gitAdd",
-			Description: "Gitの変更をステージングします",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"paths": {
-						Type:        genai.TypeArray,
-						Description: "ステージングするファイルのパス（オプション）",
-						Items: &genai.Schema{
-							Type: genai.TypeString,
+		"gitAdd": {
+			Declaration: &genai.FunctionDeclaration{
+				Name:        "gitAdd",
+				Description: "Gitの変更をステージングします",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"paths": {
+							Type:        genai.TypeArray,
+							Description: "ステージングするファイルのパス（オプション）",
+							Items: &genai.Schema{
+								Type: genai.TypeString,
+							},
+						},
+						"all": {
+							Type:        genai.TypeBoolean,
+							Description: "全ての変更をステージングするかどうか（デフォルト: false）",
 						},
 					},
-					"all": {
-						Type:        genai.TypeBoolean,
-						Description: "全ての変更をステージングするかどうか（デフォルト: false）",
+				},
+			},
+			Handler: handleGitAdd,
+		},
+		"gitCommit": {
+			Declaration: &genai.FunctionDeclaration{
+				Name:        "gitCommit",
+				Description: "Gitの変更をコミットします",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"message": {
+							Type:        genai.TypeString,
+							Description: "コミットメッセージ",
+						},
+						"type": {
+							Type:        genai.TypeString,
+							Description: "コミットの種類（例: feat, fix, refactor など）",
+						},
+						"scope": {
+							Type:        genai.TypeString,
+							Description: "コミットのスコープ（例: パッケージ名）",
+						},
+						"description": {
+							Type:        genai.TypeString,
+							Description: "コミットの詳細な説明",
+						},
+					},
+					Required: []string{"message"},
+				},
+			},
+			Handler: handleGitCommit,
+		},
+		"gitDiff": {
+			Declaration: &genai.FunctionDeclaration{
+				Name:        "gitDiff",
+				Description: "Gitの変更差分を表示します",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"path": {
+							Type:        genai.TypeString,
+							Description: "差分を確認するパス（オプション）",
+						},
+						"staged": {
+							Type:        genai.TypeBoolean,
+							Description: "ステージングされた変更の差分を表示するかどうか（デフォルト: false）",
+						},
 					},
 				},
 			},
+			Handler: handleGitDiff,
 		},
-		Handler: handleGitAdd,
-	},
-	"gitCommit": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "gitCommit",
-			Description: "Gitの変更をコミットします",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"message": {
-						Type:        genai.TypeString,
-						Description: "コミットメッセージ",
-					},
-					"type": {
-						Type:        genai.TypeString,
-						Description: "コミットの種類（例: feat, fix, refactor など）",
-					},
-					"scope": {
-						Type:        genai.TypeString,
-						Description: "コミットのスコープ（例: パッケージ名）",
-					},
-					"description": {
-						Type:        genai.TypeString,
-						Description: "コミットの詳細な説明",
-					},
-				},
-				Required: []string{"message"},
-			},
-		},
-		Handler: handleGitCommit,
-	},
-	"gitDiff": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "gitDiff",
-			Description: "Gitの変更差分を表示します",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"path": {
-						Type:        genai.TypeString,
-						Description: "差分を確認するパス（オプション）",
-					},
-					"staged": {
-						Type:        genai.TypeBoolean,
-						Description: "ステージングされた変更の差分を表示するかどうか（デフォルト: false）",
-					},
-				},
-			},
-		},
-		Handler: handleGitDiff,
-	},
+	*/
 	"complete": {
 		Declaration: &genai.FunctionDeclaration{
 			Name:        "complete",
@@ -169,140 +172,143 @@ var functions = map[string]FunctionDefinition{
 		},
 		Handler: handleComplete,
 	},
-	"readFile": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "readFile",
-			Description: "指定されたファイルの内容を読み取ります",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"path": {
-						Type:        genai.TypeString,
-						Description: "読み取るファイルのパス",
-					},
-					"startLine": {
-						Type:        genai.TypeInteger,
-						Description: "読み取り開始行（1から始まる、省略時は1行目から）",
-					},
-					"endLine": {
-						Type:        genai.TypeInteger,
-						Description: "読み取り終了行（1から始まる、省略時は最終行まで）",
-					},
-				},
-				Required: []string{"path"},
-			},
-		},
-		Handler: handleReadFile,
-	},
-	"writeFile": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "writeFile",
-			Description: "指定されたファイルに内容を書き込みます",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"path": {
-						Type:        genai.TypeString,
-						Description: "書き込むファイルのパス",
-					},
-					"content": {
-						Type:        genai.TypeString,
-						Description: "書き込む内容",
-					},
-					"append": {
-						Type:        genai.TypeBoolean,
-						Description: "追記モードかどうか（デフォルト: false）",
-					},
-					"startLine": {
-						Type:        genai.TypeInteger,
-						Description: "書き込み開始行（1から始まる、省略時はファイルの末尾）",
+	/*
+			"readFile": {
+				Declaration: &genai.FunctionDeclaration{
+					Name:        "readFile",
+					Description: "指定されたファイルの内容を読み取ります",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"path": {
+								Type:        genai.TypeString,
+								Description: "読み取るファイルのパス",
+							},
+							"startLine": {
+								Type:        genai.TypeInteger,
+								Description: "読み取り開始行（1から始まる、省略時は1行目から）",
+							},
+							"endLine": {
+								Type:        genai.TypeInteger,
+								Description: "読み取り終了行（1から始まる、省略時は最終行まで）",
+							},
+						},
+						Required: []string{"path"},
 					},
 				},
-				Required: []string{"path", "content"},
+				Handler: handleReadFile,
 			},
-		},
-		Handler: handleWriteFile,
-	},
-	"createPath": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "createPath",
-			Description: "指定されたパスを作成します（ディレクトリやファイル）",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"path": {
-						Type:        genai.TypeString,
-						Description: "作成するパス",
-					},
-					"type": {
-						Type:        genai.TypeString,
-						Description: "作成するタイプ（'file' または 'directory'）",
-						Enum:        []string{"file", "directory"},
-					},
-					"parents": {
-						Type:        genai.TypeBoolean,
-						Description: "親ディレクトリも作成するかどうか（デフォルト: false）",
-					},
-					"mode": {
-						Type:        genai.TypeInteger,
-						Description: "作成するファイル/ディレクトリのパーミッション（8進数、デフォルト: 0755）",
+			"writeFile": {
+				Declaration: &genai.FunctionDeclaration{
+					Name:        "writeFile",
+					Description: "指定されたファイルに内容を書き込みます",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"path": {
+								Type:        genai.TypeString,
+								Description: "書き込むファイルのパス",
+							},
+							"content": {
+								Type:        genai.TypeString,
+								Description: "書き込む内容",
+							},
+							"append": {
+								Type:        genai.TypeBoolean,
+								Description: "追記モードかどうか（デフォルト: false）",
+							},
+							"startLine": {
+								Type:        genai.TypeInteger,
+								Description: "書き込み開始行（1から始まる、省略時はファイルの末尾）",
+							},
+						},
+						Required: []string{"path", "content"},
 					},
 				},
-				Required: []string{"path", "type"},
+				Handler: handleWriteFile,
 			},
-		},
-		Handler: handleCreatePath,
-	},
-	"apply_patch": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "apply_patch",
-			Description: "指定されたパッチを適用します",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"patch": {
-						Type:        genai.TypeString,
-						Description: "適用するパッチの内容",
-					},
-					"path": {
-						Type:        genai.TypeString,
-						Description: "パッチを適用するファイルのパス",
-					},
-					"reverse": {
-						Type:        genai.TypeBoolean,
-						Description: "パッチを逆に適用するかどうか（デフォルト: false）",
-					},
-					"strip": {
-						Type:        genai.TypeInteger,
-						Description: "パスから取り除くディレクトリの数（デフォルト: 0）",
+			"createPath": {
+				Declaration: &genai.FunctionDeclaration{
+					Name:        "createPath",
+					Description: "指定されたパスを作成します（ディレクトリやファイル）",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"path": {
+								Type:        genai.TypeString,
+								Description: "作成するパス",
+							},
+							"type": {
+								Type:        genai.TypeString,
+								Description: "作成するタイプ（'file' または 'directory'）",
+								Enum:        []string{"file", "directory"},
+							},
+							"parents": {
+								Type:        genai.TypeBoolean,
+								Description: "親ディレクトリも作成するかどうか（デフォルト: false）",
+							},
+							"mode": {
+								Type:        genai.TypeInteger,
+								Description: "作成するファイル/ディレクトリのパーミッション（8進数、デフォルト: 0755）",
+							},
+						},
+						Required: []string{"path", "type"},
 					},
 				},
-				Required: []string{"patch", "path"},
+				Handler: handleCreatePath,
 			},
-		},
-		Handler: handleApplyPatch,
-	},
-	"getGitHubPRDiff": {
-		Declaration: &genai.FunctionDeclaration{
-			Name:        "getGitHubPRDiff",
-			Description: "GitHubのプルリクエストのdiffを取得します",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"repository": {
-						Type:        genai.TypeString,
-						Description: "リポジトリ名（例: pankona/makasero）",
-					},
-					"prNumber": {
-						Type:        genai.TypeInteger,
-						Description: "プルリクエスト番号",
+			"apply_patch": {
+				Declaration: &genai.FunctionDeclaration{
+					Name:        "apply_patch",
+					Description: "指定されたパッチを適用します",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"patch": {
+								Type:        genai.TypeString,
+								Description: "適用するパッチの内容",
+							},
+							"path": {
+								Type:        genai.TypeString,
+								Description: "パッチを適用するファイルのパス",
+							},
+							"reverse": {
+								Type:        genai.TypeBoolean,
+								Description: "パッチを逆に適用するかどうか（デフォルト: false）",
+							},
+							"strip": {
+								Type:        genai.TypeInteger,
+								Description: "パスから取り除くディレクトリの数（デフォルト: 0）",
+							},
+						},
+						Required: []string{"patch", "path"},
 					},
 				},
-				Required: []string{"repository", "prNumber"},
+				Handler: handleApplyPatch,
 			},
+
+		"getGitHubPRDiff": {
+			Declaration: &genai.FunctionDeclaration{
+				Name:        "getGitHubPRDiff",
+				Description: "GitHubのプルリクエストのdiffを取得します",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"repository": {
+							Type:        genai.TypeString,
+							Description: "リポジトリ名（例: pankona/makasero）",
+						},
+						"prNumber": {
+							Type:        genai.TypeInteger,
+							Description: "プルリクエスト番号",
+						},
+					},
+					Required: []string{"repository", "prNumber"},
+				},
+			},
+			Handler: handleGetGitHubPRDiff,
 		},
-		Handler: handleGetGitHubPRDiff,
-	},
+	*/
 	"askQuestion": {
 		Declaration: &genai.FunctionDeclaration{
 			Name:        "askQuestion",
