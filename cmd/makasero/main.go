@@ -132,11 +132,20 @@ func run() error {
 	}
 
 	// モデルに function calling 設定
+	mcpFuncDeclarations := lo.Map(mcpFuncDecls, func(fn FunctionDefinition, _ int) *genai.FunctionDeclaration {
+		return fn.Declaration
+	})
+	
+	var allFuncDeclarations []*genai.FunctionDeclaration
+	allFuncDeclarations = append(allFuncDeclarations, mcpFuncDeclarations...)
+	
+	for _, fn := range functions {
+		allFuncDeclarations = append(allFuncDeclarations, fn.Declaration)
+	}
+	
 	model.Tools = []*genai.Tool{
 		{
-			FunctionDeclarations: lo.Map(mcpFuncDecls, func(fn FunctionDefinition, _ int) *genai.FunctionDeclaration {
-				return fn.Declaration
-			}),
+			FunctionDeclarations: allFuncDeclarations,
 		},
 	}
 	
