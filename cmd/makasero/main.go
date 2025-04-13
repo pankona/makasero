@@ -51,7 +51,8 @@ func run() error {
 	if err := mcpManager.InitializeFromConfig(ctx, config); err != nil {
 		return fmt.Errorf("failed to initialize MCP clients: %v", err)
 	}
-	// いったん無効化する。MCP Server プロセスをキルする必要があるが今はそういう動きをしてくれないっぽい
+	// いったん無効化する。run 終了時に MCP Server プロセスをキルしたいが、Close にはそういう働きはないっぽい
+	// defer mcpManager.Close(ctx)
 
 	// 標準エラー出力のキャプチャ
 	stderrReaders := mcpManager.GetStderrReaders()
@@ -145,7 +146,9 @@ func run() error {
 
 	model.SystemInstruction = &genai.Content{
 		Parts: []genai.Part{
-			genai.Text("あなたはAIアシスタントです。ユーザーからのタスクを実行し、タスクが完了したら必ず「complete」関数を呼び出してください。関数を呼び出す際は、テキストで関数名を書くのではなく、実際に関数を呼び出してください。"),
+			genai.Text("You are an AI assistant.\n" +
+				"Execute tasks from users and always call the 'complete' function when a task is finished.\n" +
+				"When calling functions, do not write the function name as text, but actually call the function."),
 		},
 	}
 
