@@ -195,9 +195,7 @@ func run() error {
 	// メッセージの送信と応答の取得
 	fmt.Printf("\n🗣️ Sending message to AI:\n%s\n", strings.TrimSpace(userInput))
 	
-	taskPrompt := fmt.Sprintf("%s\n\nタスクが完了したら、必ずcomplete関数を呼び出してください。", userInput)
-	
-	resp, err := chat.SendMessage(ctx, genai.Text(taskPrompt))
+	resp, err := chat.SendMessage(ctx, genai.Text(userInput))
 	if err != nil {
 		// エラーが発生しても、それまでの履歴は保存
 		session.History = chat.History
@@ -209,7 +207,7 @@ func run() error {
 	for !shouldBreak {
 		shouldBreak = true
 
-		// レスポンスの処理
+	// レスポンスの処理
 		if len(resp.Candidates) > 0 {
 			cand := resp.Candidates[0]
 			if cand.Content != nil {
@@ -217,6 +215,7 @@ func run() error {
 					switch p := part.(type) {
 					case genai.FunctionCall:
 						fmt.Printf("\n🔧 AI uses function calling: %s\n", p.Name)
+						fmt.Printf("Function args: %v\n", p.Args)
 
 						// 関数呼び出しの場合
 						if p.Name == "complete" || p.Name == "askQuestion" {
