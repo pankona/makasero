@@ -128,7 +128,7 @@ func run() error {
 	
 	model.SystemInstruction = &genai.Content{
 		Parts: []genai.Part{
-			genai.Text("あなたはAIアシスタントです。ユーザーからのタスクを実行し、タスクが完了したら必ず「complete」関数を呼び出してください。"),
+			genai.Text("あなたはAIアシスタントです。ユーザーからのタスクを実行し、タスクが完了したら必ず「complete」関数を呼び出してください。関数を呼び出す際は、テキストで関数名を書くのではなく、実際に関数を呼び出してください。"),
 		},
 	}
 
