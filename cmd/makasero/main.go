@@ -215,7 +215,6 @@ func run() error {
 					switch p := part.(type) {
 					case genai.FunctionCall:
 						fmt.Printf("\n🔧 AI uses function calling: %s\n", p.Name)
-						fmt.Printf("Function args: %v\n", p.Args)
 
 						// 関数呼び出しの場合
 						if p.Name == "complete" || p.Name == "askQuestion" {
