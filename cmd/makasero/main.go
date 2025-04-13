@@ -137,11 +137,12 @@ func run() error {
 			FunctionDeclarations: lo.Map(mcpFuncDecls, func(fn FunctionDefinition, _ int) *genai.FunctionDeclaration {
 				return fn.Declaration
 			}),
-			ToolConfig: &genai.ToolConfig{
-				FunctionCallingConfig: &genai.FunctionCallingConfig{
-					Mode: genai.FunctionCallingAuto,
-				},
-			},
+		},
+	}
+	
+	model.ToolConfig = &genai.ToolConfig{
+		FunctionCallingConfig: &genai.FunctionCallingConfig{
+			Mode: genai.FunctionCallingAuto,
 		},
 	}
 
