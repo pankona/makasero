@@ -133,9 +133,16 @@ func run() error {
 
 	// モデルに function calling 設定
 	model.Tools = []*genai.Tool{
-		{FunctionDeclarations: lo.Map(mcpFuncDecls, func(fn FunctionDefinition, _ int) *genai.FunctionDeclaration {
-			return fn.Declaration
-		})},
+		{
+			FunctionDeclarations: lo.Map(mcpFuncDecls, func(fn FunctionDefinition, _ int) *genai.FunctionDeclaration {
+				return fn.Declaration
+			}),
+			ToolConfig: &genai.ToolConfig{
+				FunctionCallingConfig: &genai.FunctionCallingConfig{
+					Mode: genai.FunctionCallingAuto,
+				},
+			},
+		},
 	}
 
 	// list tools
