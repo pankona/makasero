@@ -194,7 +194,9 @@ func run() error {
 	// メッセージの送信と応答の取得
 	fmt.Printf("\n🗣️ Sending message to AI:\n%s\n", strings.TrimSpace(userInput))
 	
-	resp, err := chat.SendMessage(ctx, genai.Text(userInput))
+	taskPrompt := fmt.Sprintf("%s\n\nタスクが完了したら、必ずcomplete関数を呼び出してください。", userInput)
+	
+	resp, err := chat.SendMessage(ctx, genai.Text(taskPrompt))
 	if err != nil {
 		// エラーが発生しても、それまでの履歴は保存
 		session.History = chat.History
