@@ -1,6 +1,6 @@
 module github.com/pankona/makasero
 
-go 1.24
+go 1.22
 
 require (
 	github.com/google/generative-ai-go v0.19.0
