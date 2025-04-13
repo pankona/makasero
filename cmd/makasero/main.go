@@ -157,7 +157,8 @@ func run() error {
 	
 	model.ToolConfig = &genai.ToolConfig{
 		FunctionCallingConfig: &genai.FunctionCallingConfig{
-			Mode: genai.FunctionCallingAuto,
+			Mode: genai.FunctionCallingAny,
+			AllowedFunctionNames: []string{"complete", "askQuestion", "mcp_claude_Bash"},
 		},
 	}
 
