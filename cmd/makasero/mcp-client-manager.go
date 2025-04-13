@@ -11,18 +11,18 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-type MCPManager struct {
+type MCPClientManager struct {
 	clients     map[string]*MCPClient
 	clientsLock sync.RWMutex
 }
 
-func NewMCPManager() *MCPManager {
-	return &MCPManager{
+func NewMCPClientManager() *MCPClientManager {
+	return &MCPClientManager{
 		clients: make(map[string]*MCPClient),
 	}
 }
 
-func (m *MCPManager) InitializeFromConfig(ctx context.Context, config *Config) error {
+func (m *MCPClientManager) InitializeFromConfig(ctx context.Context, config *Config) error {
 	for serverName, serverConfig := range config.MCPServers {
 		client, err := NewMCPClient(ServerCmd{
 			Cmd:  serverConfig.Command,
@@ -47,7 +47,7 @@ func (m *MCPManager) InitializeFromConfig(ctx context.Context, config *Config) e
 	return nil
 }
 
-func (m *MCPManager) Close(ctx context.Context) error {
+func (m *MCPClientManager) Close(ctx context.Context) error {
 	var errs []string
 
 	m.clientsLock.RLock()
@@ -66,7 +66,7 @@ func (m *MCPManager) Close(ctx context.Context) error {
 	return nil
 }
 
-func (m *MCPManager) GetClient(name string) (*MCPClient, bool) {
+func (m *MCPClientManager) GetClient(name string) (*MCPClient, bool) {
 	m.clientsLock.RLock()
 	defer m.clientsLock.RUnlock()
 
@@ -74,7 +74,7 @@ func (m *MCPManager) GetClient(name string) (*MCPClient, bool) {
 	return client, ok
 }
 
-func (m *MCPManager) GetAllClients() map[string]*MCPClient {
+func (m *MCPClientManager) GetAllClients() map[string]*MCPClient {
 	m.clientsLock.RLock()
 	defer m.clientsLock.RUnlock()
 
@@ -86,7 +86,7 @@ func (m *MCPManager) GetAllClients() map[string]*MCPClient {
 	return clients
 }
 
-func (m *MCPManager) GenerateAllFunctionDefinitions(ctx context.Context) ([]FunctionDefinition, error) {
+func (m *MCPClientManager) GenerateAllFunctionDefinitions(ctx context.Context) ([]FunctionDefinition, error) {
 	var allFunctions []FunctionDefinition
 	var errs []string
 
@@ -110,7 +110,7 @@ func (m *MCPManager) GenerateAllFunctionDefinitions(ctx context.Context) ([]Func
 	return allFunctions, nil
 }
 
-func (m *MCPManager) SetupNotificationHandlers(handler func(serverName string, notification mcp.JSONRPCNotification)) {
+func (m *MCPClientManager) SetupNotificationHandlers(handler func(serverName string, notification mcp.JSONRPCNotification)) {
 	m.clientsLock.RLock()
 	defer m.clientsLock.RUnlock()
 
@@ -122,7 +122,7 @@ func (m *MCPManager) SetupNotificationHandlers(handler func(serverName string, n
 	}
 }
 
-func (m *MCPManager) GetStderrReaders() map[string]io.Reader {
+func (m *MCPClientManager) GetStderrReaders() map[string]io.Reader {
 	m.clientsLock.RLock()
 	defer m.clientsLock.RUnlock()
 
@@ -134,7 +134,7 @@ func (m *MCPManager) GetStderrReaders() map[string]io.Reader {
 	return readers
 }
 
-func (m *MCPManager) CallMCPTool(ctx context.Context, fullName string, args map[string]any) (map[string]any, error) {
+func (m *MCPClientManager) CallMCPTool(ctx context.Context, fullName string, args map[string]any) (map[string]any, error) {
 	parts := strings.SplitN(fullName, "_", 2)
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid MCP tool name format: %s", fullName)
@@ -154,7 +154,7 @@ func (m *MCPManager) CallMCPTool(ctx context.Context, fullName string, args map[
 	return client.callMCPTool(toolName, args)
 }
 
-func (m *MCPManager) GetFunctionDeclarations() ([]*genai.FunctionDeclaration, error) {
+func (m *MCPClientManager) GetFunctionDeclarations() ([]*genai.FunctionDeclaration, error) {
 	functions, err := m.GenerateAllFunctionDefinitions(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate function definitions: %v", err)

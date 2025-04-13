@@ -48,7 +48,7 @@ func run() error {
 		return fmt.Errorf("failed to load config: %v\nPlease create a config file at ~/.makasero/config.json with your MCP server settings", err)
 	}
 
-	mcpManager := NewMCPManager()
+	mcpManager := NewMCPClientManager()
 	ctx := context.Background()
 
 	if err := mcpManager.InitializeFromConfig(ctx, config); err != nil {
