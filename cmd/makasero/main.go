@@ -257,15 +257,6 @@ func run() error {
 
 	fmt.Println("\n--- Finish session ---")
 
-	fmt.Printf("\n🔧 AI uses function calling: complete\n")
-	
-	completeArgs := map[string]any{
-		"message": "タスクが完了しました",
-	}
-	if fn, exists := functions["complete"]; exists {
-		_, _ = fn.Handler(ctx, completeArgs)
-	}
-	
 	fmt.Printf("Saving session\n")
 	session.History = chat.History
 	session.UpdatedAt = time.Now()
