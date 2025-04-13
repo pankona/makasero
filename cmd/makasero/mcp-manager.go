@@ -94,7 +94,7 @@ func (m *MCPManager) GenerateAllFunctionDefinitions(ctx context.Context) ([]Func
 	defer m.clientsLock.RUnlock()
 
 	for serverName, client := range m.clients {
-		functions, err := client.GenerateFunctionDefinisions(ctx, serverName)
+		functions, err := client.GenerateFunctionDefinitions(ctx, serverName)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("failed to generate function definitions for %s: %v", serverName, err))
 			continue
