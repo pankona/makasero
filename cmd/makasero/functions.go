@@ -13,7 +13,7 @@ type FunctionDefinition struct {
 	Handler     FunctionHandler
 }
 
-var functions = map[string]FunctionDefinition{
+var myFunctions = map[string]FunctionDefinition{
 	"complete": {
 		Declaration: &genai.FunctionDeclaration{
 			Name:        "complete",

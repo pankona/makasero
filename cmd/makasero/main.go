@@ -142,7 +142,7 @@ func run() error {
 
 	// モデルの初期化
 	model := client.GenerativeModel(modelName)
-	
+
 	model.SystemInstruction = &genai.Content{
 		Parts: []genai.Part{
 			genai.Text("あなたはAIアシスタントです。ユーザーからのタスクを実行し、タスクが完了したら必ず「complete」関数を呼び出してください。関数を呼び出す際は、テキストで関数名を書くのではなく、実際に関数を呼び出してください。"),
@@ -155,36 +155,31 @@ func run() error {
 	for _, fn := range mcpFuncDecls {
 		functions[fn.Declaration.Name] = fn
 	}
+	for _, fn := range myFunctions {
+		functions[fn.Declaration.Name] = fn
+	}
 
 	// モデルに function calling 設定
 	mcpFuncDeclarations := lo.Map(mcpFuncDecls, func(fn FunctionDefinition, _ int) *genai.FunctionDeclaration {
 		return fn.Declaration
 	})
-	
+
 	var allFuncDeclarations []*genai.FunctionDeclaration
 	allFuncDeclarations = append(allFuncDeclarations, mcpFuncDeclarations...)
-	
+
 	for _, fn := range functions {
 		allFuncDeclarations = append(allFuncDeclarations, fn.Declaration)
 	}
-	
+
 	model.Tools = []*genai.Tool{
 		{
 			FunctionDeclarations: allFuncDeclarations,
 		},
 	}
-	
-	var allowedFunctionNames []string
-	allowedFunctionNames = append(allowedFunctionNames, "complete", "askQuestion")
-	
-	for _, fn := range mcpFuncDecls {
-		allowedFunctionNames = append(allowedFunctionNames, fn.Declaration.Name)
-	}
-	
+
 	model.ToolConfig = &genai.ToolConfig{
 		FunctionCallingConfig: &genai.FunctionCallingConfig{
-			Mode:                 genai.FunctionCallingAny,
-			AllowedFunctionNames: allowedFunctionNames,
+			Mode: genai.FunctionCallingAuto,
 		},
 	}
 
@@ -220,7 +215,7 @@ func run() error {
 
 	// メッセージの送信と応答の取得
 	fmt.Printf("\n🗣️ Sending message to AI:\n%s\n", strings.TrimSpace(userInput))
-	
+
 	resp, err := chat.SendMessage(ctx, genai.Text(userInput))
 	if err != nil {
 		// エラーが発生しても、それまでの履歴は保存
@@ -233,7 +228,7 @@ func run() error {
 	for !shouldBreak {
 		shouldBreak = true
 
-	// レスポンスの処理
+		// レスポンスの処理
 		if len(resp.Candidates) > 0 {
 			cand := resp.Candidates[0]
 			if cand.Content != nil {
