@@ -1,0 +1,34 @@
+name: Go CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+        cache: true
+
+    - name: Get dependencies
+      run: go mod download
+
+    - name: Check formatting
+      run: gofmt -d .
+      # This step will show formatting issues but not fail the build
+
+    - name: Run vet
+      run: go vet ./...
+
+    - name: Run tests
+      run: go test -v ./...
