@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/google/generative-ai-go/genai"
@@ -17,6 +18,7 @@ var mcpClient *client.StdioMCPClient
 type ServerCmd struct {
 	Cmd  string
 	Args []string
+	Env  map[string]string
 }
 
 type MCPClient struct {
@@ -24,9 +26,14 @@ type MCPClient struct {
 }
 
 func NewMCPClient(serverCmd ServerCmd) (*MCPClient, error) {
+	var env []string
+	if serverCmd.Env != nil {
+		env = expandEnvVars(serverCmd.Env)
+	}
+	
 	client, err := client.NewStdioMCPClient(
 		serverCmd.Cmd,
-		nil,
+		env,
 		serverCmd.Args...,
 	)
 	if err != nil {
@@ -231,4 +238,19 @@ func (c *MCPClient) convertSchemaType(schemaType string) genai.Type {
 	default:
 		return genai.TypeString // デフォルトは string
 	}
+}
+
+func expandEnvVars(env map[string]string) []string {
+	result := make([]string, 0, len(env))
+	for key, value := range env {
+		if strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}") {
+			envName := value[2 : len(value)-1]
+			if envValue := os.Getenv(envName); envValue != "" {
+				result = append(result, key+"="+envValue)
+			}
+		} else {
+			result = append(result, key+"="+value)
+		}
+	}
+	return result
 }
