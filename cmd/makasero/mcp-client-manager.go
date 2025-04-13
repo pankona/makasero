@@ -135,13 +135,13 @@ func (m *MCPClientManager) GetStderrReaders() map[string]io.Reader {
 }
 
 func (m *MCPClientManager) CallMCPTool(ctx context.Context, fullName string, args map[string]any) (map[string]any, error) {
-	parts := strings.SplitN(fullName, "_", 2)
-	if len(parts) != 2 {
+	parts := strings.SplitN(fullName, "_", 3)
+	if len(parts) < 3 || parts[0] != "mcp" {
 		return nil, fmt.Errorf("invalid MCP tool name format: %s", fullName)
 	}
 
-	serverName := parts[0]
-	toolName := parts[1]
+	serverName := parts[1]
+	toolName := parts[2]
 
 	m.clientsLock.RLock()
 	client, ok := m.clients[serverName]
