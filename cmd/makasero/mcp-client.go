@@ -59,7 +59,7 @@ func (c *MCPClient) Initialize(ctx context.Context) (InitializeResult, error) {
 	return InitializeResult(ret), nil
 }
 
-func (c *MCPClient) GenerateFunctionDefinisions(ctx context.Context, prefix string) ([]FunctionDefinition, error) {
+func (c *MCPClient) GenerateFunctionDefinitions(ctx context.Context, prefix string) ([]FunctionDefinition, error) {
 	tools, err := c.client.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
 		return nil, err
