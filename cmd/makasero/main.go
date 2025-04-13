@@ -125,6 +125,12 @@ func run() error {
 
 	// モデルの初期化
 	model := client.GenerativeModel(modelName)
+	
+	model.SystemInstruction = &genai.Content{
+		Parts: []genai.Part{
+			genai.Text("あなたはAIアシスタントです。ユーザーからのタスクを実行し、タスクが完了したら必ず「complete」関数を呼び出してください。"),
+		},
+	}
 
 	// 関数定義から FunctionDeclaration のスライスを作成
 	for _, fn := range mcpFuncDecls {
