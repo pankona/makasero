@@ -155,9 +155,32 @@ func (m *MCPClientManager) CallMCPTool(ctx context.Context, fullName string, arg
 	if err != nil {
 		return nil, err
 	}
+	
 	if resultMap, ok := result.(map[string]any); ok {
 		return resultMap, nil
 	}
+	
+	if mcpResult, ok := result.(*mcp.CallToolResult); ok {
+		var contents []string
+		for _, content := range mcpResult.Content {
+			if textContent, ok := content.(mcp.TextContent); ok {
+				contents = append(contents, textContent.Text)
+			} else {
+				contents = append(contents, fmt.Sprintf("%v", content))
+			}
+		}
+
+		resultMap := map[string]any{
+			"is_error": mcpResult.IsError,
+			"content":  strings.Join(contents, "\n"),
+		}
+		if mcpResult.Result.Meta != nil {
+			resultMap["meta"] = mcpResult.Result.Meta
+		}
+
+		return resultMap, nil
+	}
+	
 	return nil, fmt.Errorf("unexpected result type from callMCPTool: %T", result)
 }
 
