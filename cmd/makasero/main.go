@@ -16,8 +16,12 @@ import (
 )
 
 var (
-	debug      = flag.Bool("debug", false, "debug mode")
-	promptFile = flag.String("f", "", "prompt file")
+	debug          = flag.Bool("debug", false, "debug mode")
+	promptFile     = flag.String("f", "", "prompt file")
+	configFilePath = flag.String("config", "", "path to config file")
+	listSessionsFlag = flag.Bool("ls", false, "list sessions")
+	showHistory    = flag.String("sh", "", "show session history")
+	sessionID      = flag.String("s", "", "session ID")
 )
 
 func main() {
@@ -39,39 +43,56 @@ func run() error {
 	// コマンドライン引数の処理
 	flag.Parse()
 
-	// MCP クライアントの初期化
-	var err error
-	mcpClient, err := NewMCPClient(ServerCmd{
-		Cmd:  "claude",
-		Args: []string{"mcp", "serve"},
-	})
+	config, err := LoadConfig(*configFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to create MCP client: %v", err)
+		return fmt.Errorf("failed to load config: %v", err)
+	}
+
+	mcpManager := NewMCPManager()
+	ctx := context.Background()
+
+	if err := mcpManager.InitializeFromConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to initialize MCP clients: %v", err)
 	}
 	// いったん無効化する。MCP Server プロセスをキルする必要があるが今はそういう動きをしてくれないっぽい
-	// defer mcpClient.Close(context.Background())
 
 	// 標準エラー出力のキャプチャ
-	go io.Copy(os.Stderr, mcpClient.Stderr())
-
-	// 初期化リクエストの送信
-	initResult, err := mcpClient.Initialize(context.Background())
-	if err != nil {
-		return fmt.Errorf("failed to initialize MCP client: %v", err)
-	}
-
-	// 初期化リクエストの結果をデバッグ出力。
-	// TODO: これは　LLM に食わせるのが良いと思われる
-	fmt.Printf("claude mcp server initialize result: %s\n", initResult)
-
-	// 利用可能なツールの取得と変換
-	mcpFuncDecls, err := mcpClient.GenerateFunctionDefinisions(context.Background(), "claude")
-	if err != nil {
-		return fmt.Errorf("failed to generate claude MCP tools: %v", err)
+	stderrReaders := mcpManager.GetStderrReaders()
+	for serverName, reader := range stderrReaders {
+		serverNameCopy := serverName
+		go func(r io.Reader) {
+			if *debug {
+				buf := make([]byte, 1024)
+				for {
+					n, err := r.Read(buf)
+					if err != nil {
+						if err != io.EOF {
+							fmt.Fprintf(os.Stderr, "[%s] stderr read error: %v\n", serverNameCopy, err)
+						}
+						return
+					}
+					fmt.Fprintf(os.Stderr, "[%s] %s", serverNameCopy, buf[:n])
+				}
+			} else {
+				io.Copy(os.Stderr, r)
+			}
+		}(reader)
 	}
 
 	// 通知ハンドラの設定
-	mcpClient.OnNotification(handleNotification)
+	mcpManager.SetupNotificationHandlers(func(serverName string, notification mcp.JSONRPCNotification) {
+		if *debug {
+			fmt.Printf("[%s] Notification: %v\n", serverName, notification)
+		} else {
+			handleNotification(notification)
+		}
+	})
+
+	// 利用可能なツールの取得と変換
+	mcpFuncDecls, err := mcpManager.GenerateAllFunctionDefinitions(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to generate MCP tools: %v", err)
+	}
 
 	// セッション一覧表示の処理
 	if *listSessionsFlag {
@@ -114,7 +135,6 @@ func run() error {
 	}
 
 	// コンテキストの作成
-	ctx := context.Background()
 
 	// クライアントの初期化
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
@@ -131,6 +151,8 @@ func run() error {
 			genai.Text("あなたはAIアシスタントです。ユーザーからのタスクを実行し、タスクが完了したら必ず「complete」関数を呼び出してください。関数を呼び出す際は、テキストで関数名を書くのではなく、実際に関数を呼び出してください。"),
 		},
 	}
+
+	functions := make(map[string]FunctionDefinition)
 
 	// 関数定義から FunctionDeclaration のスライスを作成
 	for _, fn := range mcpFuncDecls {
@@ -155,10 +177,17 @@ func run() error {
 		},
 	}
 	
+	var allowedFunctionNames []string
+	allowedFunctionNames = append(allowedFunctionNames, "complete", "askQuestion")
+	
+	for _, fn := range mcpFuncDecls {
+		allowedFunctionNames = append(allowedFunctionNames, fn.Declaration.Name)
+	}
+	
 	model.ToolConfig = &genai.ToolConfig{
 		FunctionCallingConfig: &genai.FunctionCallingConfig{
-			Mode: genai.FunctionCallingAny,
-			AllowedFunctionNames: []string{"complete", "askQuestion", "mcp_claude_Bash"},
+			Mode:                 genai.FunctionCallingAny,
+			AllowedFunctionNames: allowedFunctionNames,
 		},
 	}
 
@@ -225,6 +254,30 @@ func run() error {
 							}
 							fmt.Printf("Session ID: %s\n", session.ID)
 							return nil
+						}
+
+						if strings.HasPrefix(p.Name, "mcp_") {
+							parts := strings.SplitN(p.Name, "_", 2)
+							if len(parts) != 2 {
+								return fmt.Errorf("invalid MCP tool name format: %s", p.Name)
+							}
+
+							result, err := mcpManager.CallMCPTool(ctx, p.Name, p.Args)
+							if err != nil {
+								return fmt.Errorf("MCP function %s failed: %v", p.Name, err)
+							}
+
+							// 実行結果を FunctionResponse として送信
+							resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
+								Name:     p.Name,
+								Response: result,
+							})
+							if err != nil {
+								return fmt.Errorf("failed to send function response: %v", err)
+							}
+
+							shouldBreak = false
+							continue
 						}
 
 						fn, exists := functions[p.Name]
