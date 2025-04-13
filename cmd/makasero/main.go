@@ -19,9 +19,6 @@ var (
 	debug          = flag.Bool("debug", false, "debug mode")
 	promptFile     = flag.String("f", "", "prompt file")
 	configFilePath = flag.String("config", "", "path to config file")
-	listSessionsFlag = flag.Bool("ls", false, "list sessions")
-	showHistory    = flag.String("sh", "", "show session history")
-	sessionID      = flag.String("s", "", "session ID")
 )
 
 func main() {

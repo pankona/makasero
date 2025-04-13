@@ -60,7 +60,7 @@ func (m *MCPClientManager) Close(ctx context.Context) error {
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf(strings.Join(errs, "; "))
+		return fmt.Errorf("multiple errors occurred: %s", strings.Join(errs, "; "))
 	}
 
 	return nil
@@ -104,7 +104,7 @@ func (m *MCPClientManager) GenerateAllFunctionDefinitions(ctx context.Context) (
 	}
 
 	if len(errs) > 0 {
-		return allFunctions, fmt.Errorf(strings.Join(errs, "; "))
+		return allFunctions, fmt.Errorf("multiple errors occurred while generating function definitions: %s", strings.Join(errs, "; "))
 	}
 
 	return allFunctions, nil
@@ -151,7 +151,14 @@ func (m *MCPClientManager) CallMCPTool(ctx context.Context, fullName string, arg
 		return nil, fmt.Errorf("MCP server not found: %s", serverName)
 	}
 
-	return client.callMCPTool(toolName, args)
+	result, err := client.callMCPTool(toolName, args)
+	if err != nil {
+		return nil, err
+	}
+	if resultMap, ok := result.(map[string]any); ok {
+		return resultMap, nil
+	}
+	return nil, fmt.Errorf("unexpected result type from callMCPTool: %T", result)
 }
 
 func (m *MCPClientManager) GetFunctionDeclarations() ([]*genai.FunctionDeclaration, error) {
