@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/google/generative-ai-go/genai"
 )
@@ -58,11 +60,16 @@ var myFunctions = map[string]FunctionDefinition{
 }
 
 func handleComplete(ctx context.Context, args map[string]any) (map[string]any, error) {
-	// 呼び出されないので実装しなくてよい
+	fmt.Printf("🤖 Task completed!:\n%v\n", strings.TrimSpace(args["message"].(string)))
 	return nil, nil
 }
 
 func handleAskQuestion(ctx context.Context, args map[string]any) (map[string]any, error) {
-	// 呼び出されないので実装しなくてよい
+	fmt.Printf("🤖 Question:\n%v\n", strings.TrimSpace(args["question"].(string)))
+	fmt.Printf("🤖 Options:\n")
+	options := args["options"].([]any)
+	for _, option := range options {
+		fmt.Printf("  %v\n", option.(string))
+	}
 	return nil, nil
 }

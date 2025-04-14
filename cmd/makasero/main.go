@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -227,54 +228,53 @@ func run() error {
 		return fmt.Errorf("failed to send message to AI: %v", err)
 	}
 
-	var shouldBreak bool
-	for !shouldBreak {
-		shouldBreak = true
+loop:
+	for _, cand := range resp.Candidates {
+		if cand.Content != nil {
+			for _, part := range cand.Content.Parts {
+				switch p := part.(type) {
+				case genai.FunctionCall:
+					fmt.Printf("\n🔧 AI uses function calling: %s\n", p.Name)
 
-		// レスポンスの処理
-		if len(resp.Candidates) > 0 {
-			cand := resp.Candidates[0]
-			if cand.Content != nil {
-				for _, part := range cand.Content.Parts {
-					switch p := part.(type) {
-					case genai.FunctionCall:
-						fmt.Printf("\n🔧 AI uses function calling: %s\n", p.Name)
-
-						// 関数呼び出しの場合
-						if p.Name == "complete" || p.Name == "askQuestion" {
-							session.History = chat.History
-							session.UpdatedAt = time.Now()
-							if err := saveSession(session); err != nil {
-								return err
-							}
-							fmt.Printf("Session ID: %s\n", session.ID)
-							return nil
+					if strings.HasPrefix(p.Name, "mcp_") {
+						parts := strings.SplitN(p.Name, "_", 2)
+						if len(parts) != 2 {
+							return fmt.Errorf("invalid MCP tool name format: %s", p.Name)
 						}
 
-						if strings.HasPrefix(p.Name, "mcp_") {
-							parts := strings.SplitN(p.Name, "_", 2)
-							if len(parts) != 2 {
-								return fmt.Errorf("invalid MCP tool name format: %s", p.Name)
-							}
-
-							result, err := mcpManager.CallMCPTool(ctx, p.Name, p.Args)
-							if err != nil {
-								return fmt.Errorf("MCP function %s failed: %v", p.Name, err)
-							}
-
-							// 実行結果を FunctionResponse として送信
-							resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
-								Name:     p.Name,
-								Response: result,
-							})
-							if err != nil {
-								return fmt.Errorf("failed to send function response: %v", err)
-							}
-
-							shouldBreak = false
-							continue
+						// debug p
+						buf, err := json.MarshalIndent(p, "", "  ")
+						if err != nil {
+							return fmt.Errorf("failed to marshal function response: %v", err)
+						}
+						fmt.Printf("\n🔍 Debug function call:\n%s\n", string(buf))
+						result, err := mcpManager.CallMCPTool(ctx, p.Name, p.Args)
+						if err != nil {
+							return fmt.Errorf("MCP function %s failed: %v", p.Name, err)
 						}
 
+						// debug result
+						buf, err = json.MarshalIndent(result, "", "  ")
+						if err != nil {
+							return fmt.Errorf("failed to marshal function response: %v", err)
+						}
+						fmt.Printf("\n🔍 Debug function result:\n%s\n", string(buf))
+
+						resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
+							Name:     p.Name,
+							Response: result,
+						})
+						if err != nil {
+							return fmt.Errorf("failed to send function response: %v", err)
+						}
+
+						// debug resp
+						buf, err = json.MarshalIndent(resp, "", "  ")
+						if err != nil {
+							return fmt.Errorf("failed to marshal function response: %v", err)
+						}
+						fmt.Printf("\n🔍 Debug function response:\n%s\n", string(buf))
+					} else {
 						fn, exists := functions[p.Name]
 						if !exists {
 							return fmt.Errorf("unknown function: %s", p.Name)
@@ -285,7 +285,19 @@ func run() error {
 							return fmt.Errorf("function %s failed: %v", p.Name, err)
 						}
 
-						// 実行結果を FunctionResponse として送信
+						if p.Name == "complete" || p.Name == "askQuestion" {
+							fmt.Printf("\n🤖 Task completed!:\n%v\n", strings.TrimSpace(p.Args["message"].(string)))
+
+							fmt.Println("\n--- Finish session ---")
+							session.History = chat.History
+							session.UpdatedAt = time.Now()
+							if err := saveSession(session); err != nil {
+								return err
+							}
+							fmt.Printf("Session ID: %s\n", session.ID)
+							return nil
+						}
+
 						resp, err = chat.SendMessage(ctx, genai.FunctionResponse{
 							Name:     p.Name,
 							Response: result,
@@ -293,27 +305,20 @@ func run() error {
 						if err != nil {
 							return fmt.Errorf("failed to send function response: %v", err)
 						}
-
-						// complete 関数以外の場合は続きのタスクを実行するために、ループを継続
-						shouldBreak = false
-					case genai.Text:
-						// テキスト応答の場合
-						fmt.Printf("\n🤖 Response from AI:\n%s\n", strings.TrimSpace(string(p)))
-					default:
-						fmt.Printf("unknown response type: %T\n", part)
 					}
+					goto loop
+				case genai.Text:
+					fmt.Printf("\n🤖 Response from AI:\n%s\n", strings.TrimSpace(string(p)))
+				default:
+					fmt.Printf("unknown response type: %T\n", part)
 				}
-			} else {
-				fmt.Printf("response content is nil\n")
 			}
 		} else {
-			fmt.Printf("no response candidates\n")
+			fmt.Printf("response content is nil\n")
 		}
 	}
 
 	fmt.Println("\n--- Finish session ---")
-
-	fmt.Printf("Saving session\n")
 	session.History = chat.History
 	session.UpdatedAt = time.Now()
 	if err := saveSession(session); err != nil {

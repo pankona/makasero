@@ -1,24 +1,5 @@
 {
   "mcpServers": {
-    "claude": {
-      "command": "claude",
-      "args": ["mcp", "serve"],
-      "env": {}
-    },
-    "github": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "GITHUB_PERSONAL_ACCESS_TOKEN",
-        "ghcr.io/github/github-mcp-server"
-      ],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
-      }
-    },
     "git": {
       "command": "uvx",
       "args": ["mcp-server-git", "--repository", "/home/pankona/go/src/github.com/pankona/makasero"]
