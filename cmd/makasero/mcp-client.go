@@ -243,14 +243,8 @@ func (c *MCPClient) convertSchemaType(schemaType string) genai.Type {
 func expandEnvVars(env map[string]string) []string {
 	result := make([]string, 0, len(env))
 	for key, value := range env {
-		if strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}") {
-			envName := value[2 : len(value)-1]
-			if envValue := os.Getenv(envName); envValue != "" {
-				result = append(result, key+"="+envValue)
-			}
-		} else {
-			result = append(result, key+"="+value)
-		}
+		expandedValue := os.ExpandEnv(value)
+		result = append(result, key+"="+expandedValue)
 	}
 	return result
 }
