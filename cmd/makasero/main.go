@@ -227,6 +227,18 @@ func run() error {
 		saveSession(session)
 		return fmt.Errorf("failed to send message to AI: %v", err)
 	}
+	// resp.Candidate が null であれば、プロンプトで続きを促す
+	for {
+		if resp.Candidates == nil || len(resp.Candidates) == 0 ||
+			resp.Candidates[0].Content.Parts == nil || len(resp.Candidates[0].Content.Parts) == 0 {
+			resp, err = chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
+				"If you have finished the task, please call the 'complete' function.\n"+
+				"If you have any questions, please call the 'askQuestion' function."))
+			fmt.Printf("\n🗣️ Please continue the conversation:\n")
+		} else {
+			break
+		}
+	}
 
 loop:
 	for _, cand := range resp.Candidates {
@@ -248,6 +260,7 @@ loop:
 							return fmt.Errorf("failed to marshal function response: %v", err)
 						}
 						fmt.Printf("\n🔍 Debug function call:\n%s\n", string(buf))
+
 						result, err := mcpManager.CallMCPTool(ctx, p.Name, p.Args)
 						if err != nil {
 							return fmt.Errorf("MCP function %s failed: %v", p.Name, err)
@@ -286,8 +299,6 @@ loop:
 						}
 
 						if p.Name == "complete" || p.Name == "askQuestion" {
-							fmt.Printf("\n🤖 Task completed!:\n%v\n", strings.TrimSpace(p.Args["message"].(string)))
-
 							fmt.Println("\n--- Finish session ---")
 							session.History = chat.History
 							session.UpdatedAt = time.Now()
@@ -305,7 +316,39 @@ loop:
 						if err != nil {
 							return fmt.Errorf("failed to send function response: %v", err)
 						}
+
+						// debug resp
+						buf, err := json.MarshalIndent(resp, "", "  ")
+						if err != nil {
+							return fmt.Errorf("failed to marshal function response: %v", err)
+						}
+						fmt.Printf("\n🔍 Debug function response:\n%s\n", string(buf))
 					}
+
+					// resp.Candidate が null であれば、プロンプトで続きを促す
+					for {
+						if resp == nil ||
+							resp.Candidates == nil ||
+							len(resp.Candidates) == 0 ||
+							resp.Candidates[0].Content.Parts == nil ||
+							len(resp.Candidates[0].Content.Parts) == 0 {
+							resp, err = chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
+								"If you have finished the task, please call the 'complete' function.\n"+
+								"If you have any questions, please call the 'askQuestion' function."))
+							fmt.Printf("\n🗣️ Please continue the conversation:\n")
+							// debug resp
+							buf, err := json.MarshalIndent(resp, "", "  ")
+							if err != nil {
+								return fmt.Errorf("failed to marshal function response: %v", err)
+							}
+							fmt.Printf("\n🔍 Debug function response:\n%s\n", string(buf))
+						} else {
+							break
+						}
+					}
+
+					fmt.Printf("goto loop\n")
+					time.Sleep(1 * time.Second)
 					goto loop
 				case genai.Text:
 					fmt.Printf("\n🤖 Response from AI:\n%s\n", strings.TrimSpace(string(p)))
@@ -313,6 +356,30 @@ loop:
 					fmt.Printf("unknown response type: %T\n", part)
 				}
 			}
+			// resp.Candidate が null であれば、プロンプトで続きを促す
+			for {
+				if resp == nil ||
+					resp.Candidates == nil ||
+					len(resp.Candidates) == 0 ||
+					resp.Candidates[0].Content.Parts == nil ||
+					len(resp.Candidates[0].Content.Parts) == 0 {
+					resp, err = chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
+						"If you have finished the task, please call the 'complete' function.\n"+
+						"If you have any questions, please call the 'askQuestion' function."))
+					fmt.Printf("\n🗣️ Please continue the conversation:\n")
+					// debug resp
+					buf, err := json.MarshalIndent(resp, "", "  ")
+					if err != nil {
+						return fmt.Errorf("failed to marshal function response: %v", err)
+					}
+					fmt.Printf("\n🔍 Debug function response:\n%s\n", string(buf))
+				} else {
+					break
+				}
+			}
+			fmt.Printf("goto loop\n")
+			time.Sleep(1 * time.Second)
+			goto loop
 		} else {
 			fmt.Printf("response content is nil\n")
 		}
