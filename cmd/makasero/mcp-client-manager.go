@@ -27,6 +27,7 @@ func (m *MCPClientManager) InitializeFromConfig(ctx context.Context, config *Con
 		client, err := NewMCPClient(ServerCmd{
 			Cmd:  serverConfig.Command,
 			Args: serverConfig.Args,
+			Env:  serverConfig.Env,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create MCP client for %s: %v", serverName, err)
