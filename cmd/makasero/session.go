@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
@@ -141,52 +140,7 @@ func saveSession(session *Session) error {
 }
 
 func listSessions() error {
-	entries, err := os.ReadDir(sessionDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Println("セッションはありません")
-			return nil
-		}
-		return err
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
-			id := strings.TrimSuffix(entry.Name(), ".json")
-			session, err := loadSession(id)
-			if err != nil {
-				fmt.Printf("セッション %s の読み込みに失敗: %v\n", id, err)
-				continue
-			}
-			fmt.Printf("Session ID: %s\n", session.ID)
-			fmt.Printf("Created: %s\n", session.CreatedAt.Format(time.RFC3339))
-			fmt.Printf("Messages: %d\n", len(session.History))
-
-			// 初期プロンプト（ユーザーからの最初のメッセージ）を表示
-			if len(session.History) > 0 {
-				for _, content := range session.History {
-					if content.Role == "user" {
-						fmt.Printf("初期プロンプト: ")
-						for _, part := range content.Parts {
-							if text, ok := part.(genai.Text); ok {
-								// 長すぎる場合は省略
-								prompt := string(text)
-								if len(prompt) > 100 {
-									prompt = prompt[:97] + "..."
-								}
-								fmt.Printf("%s\n", prompt)
-								break
-							}
-						}
-						break
-					}
-				}
-			}
-
-			fmt.Println()
-		}
-	}
-	return nil
+	return fmt.Errorf("This function is deprecated. Use makasero.PrintSessionsList() instead")
 }
 
 func generateSessionID() string {
@@ -197,32 +151,5 @@ func generateSessionID() string {
 }
 
 func showSessionHistory(id string) error {
-	session, err := loadSession(id)
-	if err != nil {
-		return fmt.Errorf("セッション %s の読み込みに失敗: %v", id, err)
-	}
-
-	fmt.Printf("セッションID: %s\n", session.ID)
-	fmt.Printf("作成日時: %s\n", session.CreatedAt.Format(time.RFC3339))
-	fmt.Printf("最終更新: %s\n", session.UpdatedAt.Format(time.RFC3339))
-	fmt.Printf("メッセージ数: %d\n\n", len(session.History))
-
-	for i, content := range session.History {
-		fmt.Printf("--- メッセージ %d ---\n", i+1)
-		fmt.Printf("役割: %s\n", content.Role)
-		for _, part := range content.Parts {
-			switch p := part.(type) {
-			case genai.Text:
-				fmt.Printf("%s\n", string(p))
-			case genai.FunctionCall:
-				fmt.Printf("関数呼び出し: %s\n", p.Name)
-				fmt.Printf("引数: %+v\n", p.Args)
-			case genai.FunctionResponse:
-				fmt.Printf("関数レスポンス: %s\n", p.Name)
-				fmt.Printf("結果: %+v\n", p.Response)
-			}
-		}
-		fmt.Println()
-	}
-	return nil
+	return fmt.Errorf("This function is deprecated. Use makasero.PrintSessionHistory() instead")
 }
