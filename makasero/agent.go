@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/samber/lo"
 	"google.golang.org/api/option"
 )
 
@@ -262,9 +260,13 @@ loop:
 							len(resp.Candidates) == 0 ||
 							resp.Candidates[0].Content.Parts == nil ||
 							len(resp.Candidates[0].Content.Parts) == 0 {
+							var err error
 							resp, err = a.chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
 								"If you have finished the task, please call the 'complete' function.\n"+
 								"If you have any questions, please call the 'askQuestion' function."))
+							if err != nil {
+								return fmt.Errorf("failed to send message to AI: %v", err)
+							}
 							fmt.Printf("\n🗣️ Please continue the conversation:\n")
 							if a.debug {
 								buf, err := json.MarshalIndent(resp, "", "  ")
