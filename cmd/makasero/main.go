@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pankona/makasero/makasero"
+	"github.com/pankona/makasero"
 )
 
 var (
