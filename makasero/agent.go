@@ -150,7 +150,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, userInput string) error {
 	if err != nil {
 		a.session.History = a.chat.History
 		a.session.UpdatedAt = time.Now()
-		saveSession(a.session)
+		SaveSession(a.session)
 		return fmt.Errorf("failed to send message to AI: %v", err)
 	}
 
@@ -230,7 +230,7 @@ loop:
 							fmt.Println("\n--- Finish session ---")
 							a.session.History = a.chat.History
 							a.session.UpdatedAt = time.Now()
-							if err := saveSession(a.session); err != nil {
+							if err := SaveSession(a.session); err != nil {
 								return err
 							}
 							fmt.Printf("Session ID: %s\n", a.session.ID)
@@ -324,7 +324,7 @@ loop:
 	fmt.Println("\n--- Finish session ---")
 	a.session.History = a.chat.History
 	a.session.UpdatedAt = time.Now()
-	if err := saveSession(a.session); err != nil {
+	if err := SaveSession(a.session); err != nil {
 		return err
 	}
 	fmt.Printf("Session ID: %s\n", a.session.ID)
@@ -337,7 +337,7 @@ func (a *Agent) GetSession() *Session {
 }
 
 func (a *Agent) LoadSession(sessionID string) error {
-	session, err := loadSession(sessionID)
+	session, err := LoadSession(sessionID)
 	if err != nil {
 		return err
 	}

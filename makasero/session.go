@@ -106,7 +106,7 @@ func (s *Session) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func loadSession(id string) (*Session, error) {
+func LoadSession(id string) (*Session, error) {
 	path := filepath.Join(sessionDir, id+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -121,7 +121,7 @@ func loadSession(id string) (*Session, error) {
 	return &session, nil
 }
 
-func saveSession(session *Session) error {
+func SaveSession(session *Session) error {
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func ListSessions() ([]*Session, error) {
 	for _, entry := range entries {
 		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
 			id := strings.TrimSuffix(entry.Name(), ".json")
-			session, err := loadSession(id)
+			session, err := LoadSession(id)
 			if err != nil {
 				fmt.Printf("セッション %s の読み込みに失敗: %v\n", id, err)
 				continue
@@ -202,7 +202,7 @@ func PrintSessionsList() error {
 }
 
 func PrintSessionHistory(id string) error {
-	session, err := loadSession(id)
+	session, err := LoadSession(id)
 	if err != nil {
 		return fmt.Errorf("セッション %s の読み込みに失敗: %v", id, err)
 	}

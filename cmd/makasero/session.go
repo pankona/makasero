@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/rand"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,11 +16,6 @@ const (
 	sessionDir = ".makasero/sessions"
 )
 
-var (
-	listSessionsFlag = flag.Bool("ls", false, "利用可能なセッション一覧を表示")
-	sessionID        = flag.String("s", "", "継続するセッションID")
-	showHistory      = flag.String("sh", "", "指定したセッションIDの会話履歴全文を表示")
-)
 
 type Session struct {
 	ID                string                 `json:"id"`

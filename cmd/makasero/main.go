@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/pankona/makasero/makasero"
 )
 
