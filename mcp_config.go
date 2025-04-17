@@ -40,9 +40,5 @@ func LoadMCPConfig(path string) (*MCPConfig, error) {
 		return nil, fmt.Errorf("failed to parse config file: %v", err)
 	}
 
-	if len(config.MCPServers) == 0 {
-		return nil, fmt.Errorf("no MCP servers configured in config file")
-	}
-
 	return &config, nil
 }

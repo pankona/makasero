@@ -10,19 +10,20 @@ import (
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/samber/lo"
 	"google.golang.org/api/option"
 )
 
 type Agent struct {
-	client      *genai.Client
-	model       *genai.GenerativeModel
-	chat        *genai.ChatSession
-	session     *Session
-	functions   map[string]FunctionDefinition
-	mcpManager  *MCPClientManager
-	debug       bool
-	apiKey      string
-	modelName   string
+	client     *genai.Client
+	model      *genai.GenerativeModel
+	chat       *genai.ChatSession
+	session    *Session
+	functions  map[string]FunctionDefinition
+	mcpManager *MCPClientManager
+	debug      bool
+	apiKey     string
+	modelName  string
 }
 
 type AgentOption func(*Agent)
@@ -108,7 +109,7 @@ func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...Age
 
 	model.ToolConfig = &genai.ToolConfig{
 		FunctionCallingConfig: &genai.FunctionCallingConfig{
-			Mode: genai.FunctionCallingAuto,
+			Mode: genai.FunctionCallingAny,
 		},
 	}
 
@@ -176,47 +177,29 @@ func (a *Agent) processResponse(ctx context.Context, resp *genai.GenerateContent
 loop:
 	for _, cand := range resp.Candidates {
 		if cand.Content != nil {
+			var functionCallingResponses []genai.FunctionResponse
+			if a.debug {
+				fmt.Printf("\n🔍 len parts: %d\n", len(cand.Content.Parts))
+			}
 			for _, part := range cand.Content.Parts {
 				switch p := part.(type) {
 				case genai.FunctionCall:
 					fmt.Printf("\n🔧 AI uses function calling: %s\n", p.Name)
 
-					if strings.HasPrefix(p.Name, "mcp_") {
-						if a.debug {
-							buf, err := json.MarshalIndent(p, "", "  ")
-							if err != nil {
-								return fmt.Errorf("failed to marshal function response: %v", err)
-							}
-							fmt.Printf("\n🔍 Debug function call:\n%s\n", string(buf))
+					if a.debug {
+						buf, err := json.MarshalIndent(p, "", "  ")
+						if err != nil {
+							return fmt.Errorf("failed to marshal function response: %v", err)
 						}
+						fmt.Printf("\n🔍 Debug function call:\n%s\n", string(buf))
+					}
 
-						result, err := a.mcpManager.CallMCPTool(ctx, p.Name, p.Args)
+					var result map[string]any
+					if strings.HasPrefix(p.Name, "mcp_") {
+						var err error
+						result, err = a.mcpManager.CallMCPTool(ctx, p.Name, p.Args)
 						if err != nil {
 							return fmt.Errorf("MCP function %s failed: %v", p.Name, err)
-						}
-
-						if a.debug {
-							buf, err := json.MarshalIndent(result, "", "  ")
-							if err != nil {
-								return fmt.Errorf("failed to marshal function response: %v", err)
-							}
-							fmt.Printf("\n🔍 Debug function result:\n%s\n", string(buf))
-						}
-
-						resp, err = a.chat.SendMessage(ctx, genai.FunctionResponse{
-							Name:     p.Name,
-							Response: result,
-						})
-						if err != nil {
-							return fmt.Errorf("failed to send function response: %v", err)
-						}
-
-						if a.debug {
-							buf, err := json.MarshalIndent(resp, "", "  ")
-							if err != nil {
-								return fmt.Errorf("failed to marshal function response: %v", err)
-							}
-							fmt.Printf("\n🔍 Debug function response:\n%s\n", string(buf))
 						}
 					} else {
 						fn, exists := a.functions[p.Name]
@@ -224,7 +207,8 @@ loop:
 							return fmt.Errorf("unknown function: %s", p.Name)
 						}
 
-						result, err := fn.Handler(ctx, p.Args)
+						var err error
+						result, err = fn.Handler(ctx, p.Args)
 						if err != nil {
 							return fmt.Errorf("function %s failed: %v", p.Name, err)
 						}
@@ -239,100 +223,63 @@ loop:
 							fmt.Printf("Session ID: %s\n", a.session.ID)
 							return nil
 						}
+					}
 
-						resp, err = a.chat.SendMessage(ctx, genai.FunctionResponse{
-							Name:     p.Name,
-							Response: result,
-						})
+					if a.debug {
+						buf, err := json.MarshalIndent(result, "", "  ")
 						if err != nil {
-							return fmt.Errorf("failed to send function response: %v", err)
+							return fmt.Errorf("failed to marshal function response: %v", err)
 						}
-
-						if a.debug {
-							buf, err := json.MarshalIndent(resp, "", "  ")
-							if err != nil {
-								return fmt.Errorf("failed to marshal function response: %v", err)
-							}
-							fmt.Printf("\n🔍 Debug function response:\n%s\n", string(buf))
-						}
+						fmt.Printf("\n🔍 Debug function result:\n%s\n", string(buf))
 					}
 
-					for {
-						if resp == nil ||
-							resp.Candidates == nil ||
-							len(resp.Candidates) == 0 ||
-							resp.Candidates[0].Content.Parts == nil ||
-							len(resp.Candidates[0].Content.Parts) == 0 {
-							var err error
-							resp, err = a.chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
-								"If you have finished the task, please call the 'complete' function.\n"+
-								"If you have any questions, please call the 'askQuestion' function."))
-							if err != nil {
-								return fmt.Errorf("failed to send message to AI: %v", err)
-							}
-							fmt.Printf("\n🗣️ Please continue the conversation:\n")
-							if a.debug {
-								buf, err := json.MarshalIndent(resp, "", "  ")
-								if err != nil {
-									return fmt.Errorf("failed to marshal function response: %v", err)
-								}
-								fmt.Printf("\n🔍 Debug function response:\n%s\n", string(buf))
-							}
-						} else {
-							break
-						}
-					}
-
-					fmt.Printf("goto loop\n")
-					time.Sleep(1 * time.Second)
-					goto loop
+					functionCallingResponses = append(functionCallingResponses, genai.FunctionResponse{
+						Name:     p.Name,
+						Response: result,
+					})
 				case genai.Text:
 					fmt.Printf("\n🤖 Response from AI:\n%s\n", strings.TrimSpace(string(p)))
 				default:
 					fmt.Printf("unknown response type: %T\n", part)
 				}
 			}
-			for {
-				if resp == nil ||
-					resp.Candidates == nil ||
-					len(resp.Candidates) == 0 ||
-					resp.Candidates[0].Content.Parts == nil ||
-					len(resp.Candidates[0].Content.Parts) == 0 {
-					resp, err := a.chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
-						"If you have finished the task, please call the 'complete' function.\n"+
-						"If you have any questions, please call the 'askQuestion' function."))
-					if err != nil {
-						return fmt.Errorf("failed to send message to AI: %v", err)
-					}
-					fmt.Printf("\n🗣️ Please continue the conversation:\n")
-					if a.debug {
-						buf, err := json.MarshalIndent(resp, "", "  ")
-						if err != nil {
-							return fmt.Errorf("failed to marshal function response: %v", err)
-						}
-						fmt.Printf("\n🔍 Debug function response:\n%s\n", string(buf))
-					}
-				} else {
-					break
+
+			parts := lo.Map(functionCallingResponses, func(fnResp genai.FunctionResponse, _ int) genai.Part { return fnResp })
+			var err error
+			if a.debug {
+				buf, err := json.MarshalIndent(parts, "", "  ")
+				if err != nil {
+					return fmt.Errorf("failed to marshal function response: %v", err)
 				}
+				fmt.Printf("\n🔍 Debug send message:\n%s\n", string(buf))
 			}
-			fmt.Printf("goto loop\n")
-			time.Sleep(1 * time.Second)
+			resp, err = a.chat.SendMessage(ctx, parts...)
+			if err != nil {
+				return fmt.Errorf("failed to send function response: %v", err)
+			}
+
+			if a.debug {
+				buf, err := json.MarshalIndent(resp, "", "  ")
+				if err != nil {
+					return fmt.Errorf("failed to marshal function response: %v", err)
+				}
+				fmt.Printf("\n🔍 Debug received response:\n%s\n", string(buf))
+			}
+
 			goto loop
 		} else {
 			fmt.Printf("response content is nil\n")
 		}
 	}
 
-	fmt.Println("\n--- Finish session ---")
-	a.session.History = a.chat.History
-	a.session.UpdatedAt = time.Now()
-	if err := SaveSession(a.session); err != nil {
-		return err
+	resp, err := a.chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
+		"If you have finished the task, please call the 'complete' function.\n"+
+		"If you have any questions, please call the 'askQuestion' function."))
+	if err != nil {
+		return fmt.Errorf("failed to send message to AI: %v", err)
 	}
-	fmt.Printf("Session ID: %s\n", a.session.ID)
-
-	return nil
+	fmt.Printf("\n🗣️ Please continue the conversation:\n")
+	goto loop
 }
 
 func (a *Agent) GetSession() *Session {
