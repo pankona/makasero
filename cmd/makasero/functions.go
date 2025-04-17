@@ -15,7 +15,7 @@ type FunctionDefinition struct {
 	Handler     FunctionHandler
 }
 
-var functions = map[string]FunctionDefinition{
+var _ = map[string]FunctionDefinition{
 	"complete": {
 		Declaration: &genai.FunctionDeclaration{
 			Name:        "complete",
@@ -58,6 +58,9 @@ var functions = map[string]FunctionDefinition{
 		Handler: handleAskQuestion,
 	},
 }
+
+var _ = handleComplete
+var _ = handleAskQuestion
 
 func handleComplete(ctx context.Context, args map[string]any) (map[string]any, error) {
 	fmt.Printf("🤖 Task completed!:\n%v\n", strings.TrimSpace(args["message"].(string)))
