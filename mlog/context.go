@@ -22,9 +22,6 @@ func ContextWithLogger(ctx context.Context, logger *slog.Logger) context.Context
 }
 
 func ContextWithDebug(ctx context.Context) context.Context {
-	logger := LoggerFromContext(ctx)
-	handler := logger.Handler().WithAttrs(nil)
-	handler = handler.WithAttrs(nil)
 	debugHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})
