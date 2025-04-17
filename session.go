@@ -1,9 +1,8 @@
-package main
+package makasero
 
 import (
 	"crypto/rand"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,12 +14,6 @@ import (
 
 const (
 	sessionDir = ".makasero/sessions"
-)
-
-var (
-	listSessionsFlag = flag.Bool("ls", false, "利用可能なセッション一覧を表示")
-	sessionID        = flag.String("s", "", "継続するセッションID")
-	showHistory      = flag.String("sh", "", "指定したセッションIDの会話履歴全文を表示")
 )
 
 type Session struct {
@@ -42,7 +35,6 @@ type SerializablePart struct {
 }
 
 func (s *Session) MarshalJSON() ([]byte, error) {
-	// History を SerializedHistory に変換
 	s.SerializedHistory = make([]*SerializableContent, len(s.History))
 	for i, content := range s.History {
 		serialized := &SerializableContent{
@@ -72,20 +64,17 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 		s.SerializedHistory[i] = serialized
 	}
 
-	// 一時的な構造体を作成してマーシャル
 	type Alias Session
 	return json.Marshal(&struct{ *Alias }{Alias: (*Alias)(s)})
 }
 
 func (s *Session) UnmarshalJSON(data []byte) error {
-	// 一時的な構造体を作成してアンマーシャル
 	type Alias Session
 	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
 
-	// SerializedHistory を History に変換
 	s.History = make([]*genai.Content, len(s.SerializedHistory))
 	for i, serialized := range s.SerializedHistory {
 		content := &genai.Content{
@@ -117,7 +106,7 @@ func (s *Session) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func loadSession(id string) (*Session, error) {
+func LoadSession(id string) (*Session, error) {
 	path := filepath.Join(sessionDir, id+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -132,7 +121,7 @@ func loadSession(id string) (*Session, error) {
 	return &session, nil
 }
 
-func saveSession(session *Session) error {
+func SaveSession(session *Session) error {
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
 		return err
 	}
@@ -146,64 +135,74 @@ func saveSession(session *Session) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-func listSessions() error {
+func ListSessions() ([]*Session, error) {
+	var sessions []*Session
+
 	entries, err := os.ReadDir(sessionDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("セッションはありません")
-			return nil
+			return sessions, nil
 		}
-		return err
+		return nil, err
 	}
 
 	for _, entry := range entries {
 		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
 			id := strings.TrimSuffix(entry.Name(), ".json")
-			session, err := loadSession(id)
+			session, err := LoadSession(id)
 			if err != nil {
 				fmt.Printf("セッション %s の読み込みに失敗: %v\n", id, err)
 				continue
 			}
-			fmt.Printf("Session ID: %s\n", session.ID)
-			fmt.Printf("Created: %s\n", session.CreatedAt.Format(time.RFC3339))
-			fmt.Printf("Messages: %d\n", len(session.History))
+			sessions = append(sessions, session)
+		}
+	}
 
-			// 初期プロンプト（ユーザーからの最初のメッセージ）を表示
-			if len(session.History) > 0 {
-				for _, content := range session.History {
-					if content.Role == "user" {
-						fmt.Printf("初期プロンプト: ")
-						for _, part := range content.Parts {
-							if text, ok := part.(genai.Text); ok {
-								// 長すぎる場合は省略
-								prompt := string(text)
-								if len(prompt) > 100 {
-									prompt = prompt[:97] + "..."
-								}
-								fmt.Printf("%s\n", prompt)
-								break
+	return sessions, nil
+}
+
+func PrintSessionsList() error {
+	sessions, err := ListSessions()
+	if err != nil {
+		return err
+	}
+
+	if len(sessions) == 0 {
+		fmt.Println("セッションはありません")
+		return nil
+	}
+
+	for _, session := range sessions {
+		fmt.Printf("Session ID: %s\n", session.ID)
+		fmt.Printf("Created: %s\n", session.CreatedAt.Format(time.RFC3339))
+		fmt.Printf("Messages: %d\n", len(session.History))
+
+		if len(session.History) > 0 {
+			for _, content := range session.History {
+				if content.Role == "user" {
+					fmt.Printf("初期プロンプト: ")
+					for _, part := range content.Parts {
+						if text, ok := part.(genai.Text); ok {
+							prompt := string(text)
+							if len(prompt) > 100 {
+								prompt = prompt[:97] + "..."
 							}
+							fmt.Printf("%s\n", prompt)
+							break
 						}
-						break
 					}
+					break
 				}
 			}
-
-			fmt.Println()
 		}
+
+		fmt.Println()
 	}
 	return nil
 }
 
-func generateSessionID() string {
-	timestamp := time.Now().Format("20060102150405")
-	random := make([]byte, 4)
-	rand.Read(random)
-	return fmt.Sprintf("%s_%x", timestamp, random)
-}
-
-func showSessionHistory(id string) error {
-	session, err := loadSession(id)
+func PrintSessionHistory(id string) error {
+	session, err := LoadSession(id)
 	if err != nil {
 		return fmt.Errorf("セッション %s の読み込みに失敗: %v", id, err)
 	}
@@ -231,4 +230,11 @@ func showSessionHistory(id string) error {
 		fmt.Println()
 	}
 	return nil
+}
+
+func generateSessionID() string {
+	timestamp := time.Now().Format("20060102150405")
+	random := make([]byte, 4)
+	rand.Read(random)
+	return fmt.Sprintf("%s_%x", timestamp, random)
 }
