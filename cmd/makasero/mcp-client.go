@@ -13,7 +13,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-var mcpClient *client.StdioMCPClient
+var _ *client.StdioMCPClient
 
 type ServerCmd struct {
 	Cmd  string

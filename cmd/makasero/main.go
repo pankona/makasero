@@ -69,7 +69,7 @@ func run() error {
 		// コマンドライン引数からプロンプトを取得
 		userInput = strings.Join(args, " ")
 	} else {
-		return fmt.Errorf("Please specify a prompt (command line arguments or -f option)")
+		return fmt.Errorf("please specify a prompt (command line arguments or -f option)")
 	}
 
 	// APIキーの取得
