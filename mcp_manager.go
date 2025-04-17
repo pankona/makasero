@@ -22,7 +22,7 @@ func NewMCPClientManager() *MCPClientManager {
 	}
 }
 
-func (m *MCPClientManager) InitializeFromConfig(ctx context.Context, config *Config) error {
+func (m *MCPClientManager) InitializeFromConfig(ctx context.Context, config *MCPConfig) error {
 	for serverName, serverConfig := range config.MCPServers {
 		client, err := NewMCPClient(ServerCmd{
 			Cmd:  serverConfig.Command,

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-type Config struct {
+type MCPConfig struct {
 	MCPServers map[string]MCPServerConfig `json:"mcpServers"`
 }
 
@@ -17,7 +17,7 @@ type MCPServerConfig struct {
 	Env     map[string]string `json:"env"`
 }
 
-func LoadConfig(path string) (*Config, error) {
+func LoadMCPConfig(path string) (*MCPConfig, error) {
 	if path == "" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
@@ -35,7 +35,7 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %v", err)
 	}
 
-	var config Config
+	var config MCPConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %v", err)
 	}

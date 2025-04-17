@@ -45,7 +45,7 @@ func WithModelName(modelName string) AgentOption {
 	}
 }
 
-func NewAgent(ctx context.Context, apiKey string, config *Config, opts ...AgentOption) (*Agent, error) {
+func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...AgentOption) (*Agent, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
