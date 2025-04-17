@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/pankona/makasero/mlog"
 	"github.com/samber/lo"
 	"google.golang.org/api/option"
 )
@@ -59,6 +60,12 @@ func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...Age
 
 	for _, opt := range opts {
 		opt(agent)
+	}
+
+	if agent.debug {
+		mlog.ConfigureDebug()
+	} else {
+		mlog.Configure(mlog.DefaultConfig())
 	}
 
 	mcpManager := NewMCPClientManager()
@@ -127,7 +134,7 @@ func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...Age
 
 	mcpManager.SetupNotificationHandlers(func(serverName string, notification mcp.JSONRPCNotification) {
 		if agent.debug {
-			fmt.Printf("[%s] Notification: %v\n", serverName, notification)
+			mlog.Debugf(ctx, "[%s] Notification: %v", serverName, notification)
 		} else {
 			agent.handleNotification(notification)
 		}
@@ -144,11 +151,18 @@ func (a *Agent) Close() error {
 }
 
 func (a *Agent) ProcessMessage(ctx context.Context, userInput string) error {
-	fmt.Printf("\n--- Start session ---\n")
-	fmt.Printf("\n🗣️ Sending message to AI:\n%s\n", strings.TrimSpace(userInput))
+	ctx = mlog.ContextWithSessionID(ctx, a.session.ID)
+	
+	if a.debug {
+		ctx = mlog.ContextWithDebug(ctx)
+	}
+	
+	mlog.Infof(ctx, "\n--- Start session ---\n")
+	mlog.Infof(ctx, "\n🗣️ Sending message to AI:\n%s\n", strings.TrimSpace(userInput))
 
 	resp, err := a.chat.SendMessage(ctx, genai.Text(userInput))
 	if err != nil {
+		mlog.Errorf(ctx, "Failed to send message to AI: %v", err)
 		a.session.History = a.chat.History
 		a.session.UpdatedAt = time.Now()
 		SaveSession(a.session)
@@ -156,42 +170,50 @@ func (a *Agent) ProcessMessage(ctx context.Context, userInput string) error {
 	}
 
 	for {
-		if len(resp.Candidates) == 0 ||
-			len(resp.Candidates[0].Content.Parts) == 0 {
-			resp, err = a.chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
-				"If you have finished the task, please call the 'complete' function.\n"+
-				"If you have any questions, please call the 'askQuestion' function."))
-			if err != nil {
-				return fmt.Errorf("failed to send message to AI: %v", err)
+			if len(resp.Candidates) == 0 ||
+				len(resp.Candidates[0].Content.Parts) == 0 {
+				resp, err = a.chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
+					"If you have finished the task, please call the 'complete' function.\n"+
+					"If you have any questions, please call the 'askQuestion' function."))
+				if err != nil {
+					mlog.Errorf(ctx, "Failed to send message to AI: %v", err)
+					return fmt.Errorf("failed to send message to AI: %v", err)
+				}
+				mlog.Infof(ctx, "\n🗣️ Please continue the conversation:\n")
+			} else {
+				break
 			}
-			fmt.Printf("\n🗣️ Please continue the conversation:\n")
-		} else {
-			break
-		}
 	}
 
 	return a.processResponse(ctx, resp)
 }
 
 func (a *Agent) processResponse(ctx context.Context, resp *genai.GenerateContentResponse) error {
+	ctx = mlog.ContextWithSessionID(ctx, a.session.ID)
+	
+	if a.debug {
+		ctx = mlog.ContextWithDebug(ctx)
+	}
+	
 loop:
 	for _, cand := range resp.Candidates {
 		if cand.Content != nil {
 			var functionCallingResponses []genai.FunctionResponse
 			if a.debug {
-				fmt.Printf("\n🔍 len parts: %d\n", len(cand.Content.Parts))
+				mlog.Debugf(ctx, "\n🔍 len parts: %d\n", len(cand.Content.Parts))
 			}
 			for _, part := range cand.Content.Parts {
 				switch p := part.(type) {
 				case genai.FunctionCall:
-					fmt.Printf("\n🔧 AI uses function calling: %s\n", p.Name)
+					fnCtx := mlog.ContextWithAttr(ctx, "function", p.Name)
+					mlog.Infof(fnCtx, "\n🔧 AI uses function calling: %s\n", p.Name)
 
 					if a.debug {
 						buf, err := json.MarshalIndent(p, "", "  ")
 						if err != nil {
 							return fmt.Errorf("failed to marshal function response: %v", err)
 						}
-						fmt.Printf("\n🔍 Debug function call:\n%s\n", string(buf))
+						mlog.Debugf(fnCtx, "\n🔍 Debug function call:\n%s\n", string(buf))
 					}
 
 					var result map[string]any
@@ -199,28 +221,32 @@ loop:
 						var err error
 						result, err = a.mcpManager.CallMCPTool(ctx, p.Name, p.Args)
 						if err != nil {
+							mlog.Errorf(ctx, "MCP function %s failed: %v", p.Name, err)
 							return fmt.Errorf("MCP function %s failed: %v", p.Name, err)
 						}
 					} else {
 						fn, exists := a.functions[p.Name]
 						if !exists {
+							mlog.Errorf(ctx, "Unknown function: %s", p.Name)
 							return fmt.Errorf("unknown function: %s", p.Name)
 						}
 
 						var err error
 						result, err = fn.Handler(ctx, p.Args)
 						if err != nil {
+							mlog.Errorf(ctx, "Function %s failed: %v", p.Name, err)
 							return fmt.Errorf("function %s failed: %v", p.Name, err)
 						}
 
 						if p.Name == "complete" || p.Name == "askQuestion" {
-							fmt.Println("\n--- Finish session ---")
+							mlog.Infof(ctx, "\n--- Finish session ---")
 							a.session.History = a.chat.History
 							a.session.UpdatedAt = time.Now()
 							if err := SaveSession(a.session); err != nil {
+								mlog.Errorf(ctx, "Failed to save session: %v", err)
 								return err
 							}
-							fmt.Printf("Session ID: %s\n", a.session.ID)
+							mlog.Infof(ctx, "Session ID: %s", a.session.ID)
 							return nil
 						}
 					}
@@ -230,7 +256,7 @@ loop:
 						if err != nil {
 							return fmt.Errorf("failed to marshal function response: %v", err)
 						}
-						fmt.Printf("\n🔍 Debug function result:\n%s\n", string(buf))
+						mlog.Debugf(ctx, "\n🔍 Debug function result:\n%s\n", string(buf))
 					}
 
 					functionCallingResponses = append(functionCallingResponses, genai.FunctionResponse{
@@ -238,9 +264,9 @@ loop:
 						Response: result,
 					})
 				case genai.Text:
-					fmt.Printf("\n🤖 Response from AI:\n%s\n", strings.TrimSpace(string(p)))
+					mlog.Infof(ctx, "\n🤖 Response from AI:\n%s\n", strings.TrimSpace(string(p)))
 				default:
-					fmt.Printf("unknown response type: %T\n", part)
+					mlog.Warnf(ctx, "Unknown response type: %T", part)
 				}
 			}
 
@@ -251,10 +277,11 @@ loop:
 				if err != nil {
 					return fmt.Errorf("failed to marshal function response: %v", err)
 				}
-				fmt.Printf("\n🔍 Debug send message:\n%s\n", string(buf))
+				mlog.Debugf(ctx, "\n🔍 Debug send message:\n%s\n", string(buf))
 			}
 			resp, err = a.chat.SendMessage(ctx, parts...)
 			if err != nil {
+				mlog.Errorf(ctx, "Failed to send function response: %v", err)
 				return fmt.Errorf("failed to send function response: %v", err)
 			}
 
@@ -263,12 +290,12 @@ loop:
 				if err != nil {
 					return fmt.Errorf("failed to marshal function response: %v", err)
 				}
-				fmt.Printf("\n🔍 Debug received response:\n%s\n", string(buf))
+				mlog.Debugf(ctx, "\n🔍 Debug received response:\n%s\n", string(buf))
 			}
 
 			goto loop
 		} else {
-			fmt.Printf("response content is nil\n")
+			mlog.Warnf(ctx, "Response content is nil")
 		}
 	}
 
@@ -276,9 +303,10 @@ loop:
 		"If you have finished the task, please call the 'complete' function.\n"+
 		"If you have any questions, please call the 'askQuestion' function."))
 	if err != nil {
+		mlog.Errorf(ctx, "Failed to send message to AI: %v", err)
 		return fmt.Errorf("failed to send message to AI: %v", err)
 	}
-	fmt.Printf("\n🗣️ Please continue the conversation:\n")
+	mlog.Infof(ctx, "\n🗣️ Please continue the conversation:\n")
 	goto loop
 }
 
@@ -298,7 +326,9 @@ func (a *Agent) LoadSession(sessionID string) error {
 }
 
 func (a *Agent) handleNotification(notification mcp.JSONRPCNotification) {
-	fmt.Printf("Received notification: %v\n", notification)
+	ctx := context.Background()
+	ctx = mlog.ContextWithSessionID(ctx, a.session.ID)
+	mlog.Infof(ctx, "Received notification: %v", notification)
 }
 
 func (a *Agent) GetAvailableFunctions() []string {
