@@ -3,6 +3,7 @@ package mlog
 import (
 	"context"
 	"log/slog"
+	"os"
 	"time"
 )
 
@@ -22,17 +23,21 @@ func ContextWithLogger(ctx context.Context, logger *slog.Logger) context.Context
 
 func ContextWithDebug(ctx context.Context) context.Context {
 	logger := LoggerFromContext(ctx)
-	debugLogger := logger.WithOptions(slog.HandlerOptions{
+	handler := logger.Handler().WithAttrs(nil)
+	handler = handler.WithAttrs(nil)
+	debugHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})
+	debugLogger := slog.New(debugHandler)
 	return ContextWithLogger(ctx, debugLogger)
 }
 
 func ContextWithLogLevel(ctx context.Context, level slog.Level) context.Context {
 	logger := LoggerFromContext(ctx)
-	newLogger := logger.WithOptions(slog.HandlerOptions{
+	levelHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: level,
 	})
+	newLogger := slog.New(levelHandler)
 	return ContextWithLogger(ctx, newLogger)
 }
 
