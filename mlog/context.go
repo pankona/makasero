@@ -33,7 +33,6 @@ func ContextWithDebug(ctx context.Context) context.Context {
 }
 
 func ContextWithLogLevel(ctx context.Context, level slog.Level) context.Context {
-	logger := LoggerFromContext(ctx)
 	levelHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: level,
 	})
