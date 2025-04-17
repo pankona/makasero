@@ -15,6 +15,14 @@ import (
 	"google.golang.org/api/option"
 )
 
+func mustMarshalIndent(v interface{}) []byte {
+	buf, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal JSON: %v", err))
+	}
+	return buf
+}
+
 type Agent struct {
 	client     *genai.Client
 	model      *genai.GenerativeModel
@@ -209,11 +217,7 @@ loop:
 					mlog.Infof(fnCtx, "\n🔧 AI uses function calling: %s\n", p.Name)
 
 					if a.debug {
-						buf, err := json.MarshalIndent(p, "", "  ")
-						if err != nil {
-							return fmt.Errorf("failed to marshal function response: %v", err)
-						}
-						mlog.Debugf(fnCtx, "\n🔍 Debug function call:\n%s\n", string(buf))
+						mlog.Debugf(fnCtx, "\n🔍 Debug function call:\n%s\n", string(mustMarshalIndent(p)))
 					}
 
 					var result map[string]any
@@ -252,11 +256,7 @@ loop:
 					}
 
 					if a.debug {
-						buf, err := json.MarshalIndent(result, "", "  ")
-						if err != nil {
-							return fmt.Errorf("failed to marshal function response: %v", err)
-						}
-						mlog.Debugf(ctx, "\n🔍 Debug function result:\n%s\n", string(buf))
+						mlog.Debugf(ctx, "\n🔍 Debug function result:\n%s\n", string(mustMarshalIndent(result)))
 					}
 
 					functionCallingResponses = append(functionCallingResponses, genai.FunctionResponse{
@@ -273,11 +273,7 @@ loop:
 			parts := lo.Map(functionCallingResponses, func(fnResp genai.FunctionResponse, _ int) genai.Part { return fnResp })
 			var err error
 			if a.debug {
-				buf, err := json.MarshalIndent(parts, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal function response: %v", err)
-				}
-				mlog.Debugf(ctx, "\n🔍 Debug send message:\n%s\n", string(buf))
+				mlog.Debugf(ctx, "\n🔍 Debug send message:\n%s\n", string(mustMarshalIndent(parts)))
 			}
 			resp, err = a.chat.SendMessage(ctx, parts...)
 			if err != nil {
@@ -286,11 +282,7 @@ loop:
 			}
 
 			if a.debug {
-				buf, err := json.MarshalIndent(resp, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal function response: %v", err)
-				}
-				mlog.Debugf(ctx, "\n🔍 Debug received response:\n%s\n", string(buf))
+				mlog.Debugf(ctx, "\n🔍 Debug received response:\n%s\n", string(mustMarshalIndent(resp)))
 			}
 
 			goto loop

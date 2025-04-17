@@ -127,12 +127,7 @@ func SaveSession(session *Session) error {
 	}
 
 	path := filepath.Join(sessionDir, session.ID+".json")
-	data, err := json.MarshalIndent(session, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, mustMarshalIndent(session), 0644)
 }
 
 func ListSessions() ([]*Session, error) {
