@@ -216,9 +216,7 @@ loop:
 					fnCtx := mlog.ContextWithAttr(ctx, "function", p.Name)
 					mlog.Infof(fnCtx, "\n🔧 AI uses function calling: %s\n", p.Name)
 
-					if a.debug {
-						mlog.Debugf(fnCtx, "\n🔍 Debug function call:\n%s\n", string(mustMarshalIndent(p)))
-					}
+					mlog.Debugf(fnCtx, "\n🔍 Debug function call:\n%s\n", string(mustMarshalIndent(p)))
 
 					var result map[string]any
 					if strings.HasPrefix(p.Name, "mcp_") {
@@ -255,9 +253,7 @@ loop:
 						}
 					}
 
-					if a.debug {
-						mlog.Debugf(ctx, "\n🔍 Debug function result:\n%s\n", string(mustMarshalIndent(result)))
-					}
+					mlog.Debugf(ctx, "\n🔍 Debug function result:\n%s\n", string(mustMarshalIndent(result)))
 
 					functionCallingResponses = append(functionCallingResponses, genai.FunctionResponse{
 						Name:     p.Name,
@@ -272,18 +268,14 @@ loop:
 
 			parts := lo.Map(functionCallingResponses, func(fnResp genai.FunctionResponse, _ int) genai.Part { return fnResp })
 			var err error
-			if a.debug {
-				mlog.Debugf(ctx, "\n🔍 Debug send message:\n%s\n", string(mustMarshalIndent(parts)))
-			}
+			mlog.Debugf(ctx, "\n🔍 Debug send message:\n%s\n", string(mustMarshalIndent(parts)))
 			resp, err = a.chat.SendMessage(ctx, parts...)
 			if err != nil {
 				mlog.Errorf(ctx, "Failed to send function response: %v", err)
 				return fmt.Errorf("failed to send function response: %v", err)
 			}
 
-			if a.debug {
-				mlog.Debugf(ctx, "\n🔍 Debug received response:\n%s\n", string(mustMarshalIndent(resp)))
-			}
+			mlog.Debugf(ctx, "\n🔍 Debug received response:\n%s\n", string(mustMarshalIndent(resp)))
 
 			goto loop
 		} else {
