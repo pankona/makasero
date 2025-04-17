@@ -1,8 +1,3 @@
 {
-  "mcpServers": {
-    "git": {
-      "command": "uvx",
-      "args": ["mcp-server-git", "--repository", "/home/pankona/go/src/github.com/pankona/makasero"]
-    }
-  }
+  "mcpServers": {}
 }

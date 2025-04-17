@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	debug          = flag.Bool("debug", false, "debug mode")
-	promptFile     = flag.String("f", "", "prompt file")
-	configFilePath = flag.String("config", "", "path to config file")
+	debug            = flag.Bool("debug", false, "debug mode")
+	promptFile       = flag.String("f", "", "prompt file")
+	configFilePath   = flag.String("config", "", "path to config file")
 	listSessionsFlag = flag.Bool("ls", false, "利用可能なセッション一覧を表示")
 	sessionID        = flag.String("s", "", "継続するセッションID")
 	showHistory      = flag.String("sh", "", "指定したセッションIDの会話履歴全文を表示")
