@@ -10,6 +10,8 @@ import (
 type loggerKey struct{}
 type logAttrKey struct{}
 
+// LoggerFromContext retrieves a logger from the context.
+// If no logger is found in the context, it returns the default logger.
 func LoggerFromContext(ctx context.Context) *slog.Logger {
 	if logger, ok := ctx.Value(loggerKey{}).(*slog.Logger); ok {
 		return logger
@@ -17,11 +19,14 @@ func LoggerFromContext(ctx context.Context) *slog.Logger {
 	return defaultLogger
 }
 
+// ContextWithLogger creates a new context with the specified logger.
 func ContextWithLogger(ctx context.Context, logger *slog.Logger) context.Context {
 	return context.WithValue(ctx, loggerKey{}, logger)
 }
 
+// ContextWithDebug creates a new context with a logger configured for debug level logging.
 func ContextWithDebug(ctx context.Context) context.Context {
+	// Create a new handler with debug level
 	debugHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})
@@ -29,6 +34,7 @@ func ContextWithDebug(ctx context.Context) context.Context {
 	return ContextWithLogger(ctx, debugLogger)
 }
 
+// ContextWithLogLevel creates a new context with a logger configured for the specified log level.
 func ContextWithLogLevel(ctx context.Context, level slog.Level) context.Context {
 	levelHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: level,
@@ -37,6 +43,8 @@ func ContextWithLogLevel(ctx context.Context, level slog.Level) context.Context 
 	return ContextWithLogger(ctx, newLogger)
 }
 
+// ContextWithAttr adds an attribute to the context for logging.
+// The attribute will be included in all log messages created with this context.
 func ContextWithAttr(ctx context.Context, key string, value interface{}) context.Context {
 	var attrs []slog.Attr
 	if existingAttrs, ok := ctx.Value(logAttrKey{}).([]slog.Attr); ok {
@@ -65,10 +73,14 @@ func ContextWithAttr(ctx context.Context, key string, value interface{}) context
 	return context.WithValue(ctx, logAttrKey{}, attrs)
 }
 
+// ContextWithSessionID adds a session_id attribute to the context for logging.
+// This is a convenience function for ContextWithAttr with the key "session_id".
 func ContextWithSessionID(ctx context.Context, sessionID string) context.Context {
 	return ContextWithAttr(ctx, "session_id", sessionID)
 }
 
+// AttrsFromContext retrieves the logging attributes from the context.
+// Returns nil if no attributes are found.
 func AttrsFromContext(ctx context.Context) []slog.Attr {
 	if attrs, ok := ctx.Value(logAttrKey{}).([]slog.Attr); ok {
 		return attrs
