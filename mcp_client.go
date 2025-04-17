@@ -2,7 +2,6 @@ package makasero
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -56,11 +55,7 @@ func (c *MCPClient) Initialize(ctx context.Context) (InitializeResult, error) {
 		return "", err
 	}
 
-	ret, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return "", err
-	}
-
+	ret := mustMarshalIndent(result)
 	return InitializeResult(ret), nil
 }
 
