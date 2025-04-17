@@ -155,11 +155,14 @@ func (a *Agent) ProcessMessage(ctx context.Context, userInput string) error {
 	}
 
 	for {
-		if resp.Candidates == nil || len(resp.Candidates) == 0 ||
-			resp.Candidates[0].Content.Parts == nil || len(resp.Candidates[0].Content.Parts) == 0 {
+		if len(resp.Candidates) == 0 ||
+			len(resp.Candidates[0].Content.Parts) == 0 {
 			resp, err = a.chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
 				"If you have finished the task, please call the 'complete' function.\n"+
 				"If you have any questions, please call the 'askQuestion' function."))
+			if err != nil {
+				return fmt.Errorf("failed to send message to AI: %v", err)
+			}
 			fmt.Printf("\n🗣️ Please continue the conversation:\n")
 		} else {
 			break

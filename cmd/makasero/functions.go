@@ -15,7 +15,7 @@ type FunctionDefinition struct {
 	Handler     FunctionHandler
 }
 
-var myFunctions = map[string]FunctionDefinition{
+var _ = map[string]FunctionDefinition{
 	"complete": {
 		Declaration: &genai.FunctionDeclaration{
 			Name:        "complete",
@@ -59,6 +59,9 @@ var myFunctions = map[string]FunctionDefinition{
 	},
 }
 
+var _ = handleComplete
+var _ = handleAskQuestion
+
 func handleComplete(ctx context.Context, args map[string]any) (map[string]any, error) {
 	fmt.Printf("🤖 Task completed!:\n%v\n", strings.TrimSpace(args["message"].(string)))
 	return nil, nil
@@ -67,9 +70,11 @@ func handleComplete(ctx context.Context, args map[string]any) (map[string]any, e
 func handleAskQuestion(ctx context.Context, args map[string]any) (map[string]any, error) {
 	fmt.Printf("🤖 Question:\n%v\n", strings.TrimSpace(args["question"].(string)))
 	fmt.Printf("🤖 Options:\n")
-	options := args["options"].([]any)
-	for _, option := range options {
-		fmt.Printf("  %v\n", option.(string))
+	options, ok := args["options"].([]any)
+	if ok && len(options) > 0 {
+		for _, option := range options {
+			fmt.Printf("  %v\n", option.(string))
+		}
 	}
 	return nil, nil
 }
