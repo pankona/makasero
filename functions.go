@@ -106,9 +106,9 @@ var builtinFunctions = map[string]FunctionDefinition{
 		},
 		Handler: handleComplete,
 	},
-	"askQuestion": {
+	"ask_question": {
 		Declaration: &genai.FunctionDeclaration{
-			Name:        "askQuestion",
+			Name:        "ask_question",
 			Description: "ユーザーに質問を投げかけます。タスクの遂行のためにさらに情報が必要である場合にこの関数を呼び出します。",
 			Parameters: &genai.Schema{
 				Type: genai.TypeObject,
