@@ -124,7 +124,7 @@ func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...Age
 
 	model.ToolConfig = &genai.ToolConfig{
 		FunctionCallingConfig: &genai.FunctionCallingConfig{
-			Mode: genai.FunctionCallingAny,
+			Mode: genai.FunctionCallingAuto,
 		},
 	}
 
@@ -160,56 +160,76 @@ func (a *Agent) Close() error {
 
 func (a *Agent) ProcessMessage(ctx context.Context, userInput string) error {
 	ctx = mlog.ContextWithSessionID(ctx, a.session.ID)
-	
+
 	if a.debug {
 		ctx = mlog.ContextWithDebug(ctx)
 	}
-	
+
 	mlog.Infof(ctx, "\n--- Start session ---\n")
 	mlog.Infof(ctx, "\n🗣️ Sending message to AI:\n%s\n", strings.TrimSpace(userInput))
 
 	resp, err := a.chat.SendMessage(ctx, genai.Text(userInput))
 	if err != nil {
-		mlog.Errorf(ctx, "Failed to send message to AI: %v", err)
-		a.session.History = a.chat.History
-		a.session.UpdatedAt = time.Now()
-		SaveSession(a.session)
 		return fmt.Errorf("failed to send message to AI: %v", err)
 	}
 
+	mlog.Debugf(ctx, "\n🔍 Debug received response:\n%s\n", string(mustMarshalIndent(resp)))
+
+	// continue loop until shouldStop is true
 	for {
-			if len(resp.Candidates) == 0 ||
-				len(resp.Candidates[0].Content.Parts) == 0 {
-				resp, err = a.chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
+		newResp, shouldStop, err := a.processResponse(ctx, resp)
+		if err != nil {
+			return fmt.Errorf("failed to process response: %v", err)
+		}
+
+		if shouldStop {
+			break
+		}
+
+		// shouldStop が false で resp が nil ということはまだタスクが終わっていないので続けてもらう
+		if newResp == nil {
+			newResp, err := a.chat.SendMessage(ctx,
+				genai.Text("Task may not be finished. Please continue.\n"+
 					"If you have finished the task, please call the 'complete' function.\n"+
 					"If you have any questions, please call the 'askQuestion' function."))
-				if err != nil {
-					mlog.Errorf(ctx, "Failed to send message to AI: %v", err)
-					return fmt.Errorf("failed to send message to AI: %v", err)
-				}
-				mlog.Infof(ctx, "\n🗣️ Please continue the conversation:\n")
-			} else {
-				break
+			if err != nil {
+				mlog.Errorf(ctx, "Failed to send message to AI: %v", err)
+				return fmt.Errorf("failed to send message to AI: %v", err)
 			}
+
+			mlog.Infof(ctx, "\n🗣️ Please continue the conversation:\n")
+			resp = newResp
+
+			continue
+		}
+
+		resp = newResp
 	}
 
-	return a.processResponse(ctx, resp)
+	mlog.Infof(ctx, "\n--- Finish session ---")
+	a.session.History = a.chat.History
+	a.session.UpdatedAt = time.Now()
+	if err := SaveSession(a.session); err != nil {
+		mlog.Errorf(ctx, "Failed to save session: %v", err)
+		return fmt.Errorf("failed to save session: %v", err)
+	}
+	mlog.Infof(ctx, "Session ID: %s", a.session.ID)
+
+	return nil
 }
 
-func (a *Agent) processResponse(ctx context.Context, resp *genai.GenerateContentResponse) error {
+func (a *Agent) processResponse(ctx context.Context, resp *genai.GenerateContentResponse) (*genai.GenerateContentResponse, bool, error) {
 	ctx = mlog.ContextWithSessionID(ctx, a.session.ID)
-	
+
 	if a.debug {
 		ctx = mlog.ContextWithDebug(ctx)
 	}
-	
-loop:
+
+	var functionCallingResponses []genai.FunctionResponse
+
 	for _, cand := range resp.Candidates {
 		if cand.Content != nil {
-			var functionCallingResponses []genai.FunctionResponse
-			if a.debug {
-				mlog.Debugf(ctx, "\n🔍 len parts: %d\n", len(cand.Content.Parts))
-			}
+			mlog.Debugf(ctx, "\n🔍 len parts: %d\n", len(cand.Content.Parts))
 			for _, part := range cand.Content.Parts {
 				switch p := part.(type) {
 				case genai.FunctionCall:
@@ -220,41 +240,43 @@ loop:
 
 					var result map[string]any
 					if strings.HasPrefix(p.Name, "mcp_") {
+						// mcp functions
 						var err error
 						result, err = a.mcpManager.CallMCPTool(ctx, p.Name, p.Args)
 						if err != nil {
 							mlog.Errorf(ctx, "MCP function %s failed: %v", p.Name, err)
-							return fmt.Errorf("MCP function %s failed: %v", p.Name, err)
+							result = map[string]any{
+								"is_error": true,
+								"output":   fmt.Sprintf("MCP function %s failed: %v", p.Name, err),
+							}
 						}
 					} else {
+						// builtin functions
 						fn, exists := a.functions[p.Name]
 						if !exists {
 							mlog.Errorf(ctx, "Unknown function: %s", p.Name)
-							return fmt.Errorf("unknown function: %s", p.Name)
+							result = map[string]any{
+								"is_error": true,
+								"output":   fmt.Sprintf("unknown function: %s", p.Name),
+							}
 						}
 
 						var err error
 						result, err = fn.Handler(ctx, p.Args)
 						if err != nil {
 							mlog.Errorf(ctx, "Function %s failed: %v", p.Name, err)
-							return fmt.Errorf("function %s failed: %v", p.Name, err)
+							result = map[string]any{
+								"is_error": true,
+								"output":   fmt.Sprintf("function %s failed: %v", p.Name, err),
+							}
 						}
 
 						if p.Name == "complete" || p.Name == "askQuestion" {
-							mlog.Infof(ctx, "\n--- Finish session ---")
-							a.session.History = a.chat.History
-							a.session.UpdatedAt = time.Now()
-							if err := SaveSession(a.session); err != nil {
-								mlog.Errorf(ctx, "Failed to save session: %v", err)
-								return err
-							}
-							mlog.Infof(ctx, "Session ID: %s", a.session.ID)
-							return nil
+							return nil, true, nil
 						}
 					}
 
 					mlog.Debugf(ctx, "\n🔍 Debug function result:\n%s\n", string(mustMarshalIndent(result)))
-
 					functionCallingResponses = append(functionCallingResponses, genai.FunctionResponse{
 						Name:     p.Name,
 						Response: result,
@@ -266,32 +288,26 @@ loop:
 				}
 			}
 
-			parts := lo.Map(functionCallingResponses, func(fnResp genai.FunctionResponse, _ int) genai.Part { return fnResp })
-			var err error
-			mlog.Debugf(ctx, "\n🔍 Debug send message:\n%s\n", string(mustMarshalIndent(parts)))
-			resp, err = a.chat.SendMessage(ctx, parts...)
-			if err != nil {
-				mlog.Errorf(ctx, "Failed to send function response: %v", err)
-				return fmt.Errorf("failed to send function response: %v", err)
+			if len(functionCallingResponses) > 0 {
+				parts := lo.Map(functionCallingResponses, func(fnResp genai.FunctionResponse, _ int) genai.Part { return fnResp })
+
+				var err error
+				mlog.Debugf(ctx, "\n🔍 Debug send message:\n%s\n", string(mustMarshalIndent(parts)))
+				resp, err = a.chat.SendMessage(ctx, parts...)
+				if err != nil {
+					mlog.Errorf(ctx, "Failed to send function response: %v", err)
+					return nil, false, fmt.Errorf("failed to send function response: %v", err)
+				}
+
+				mlog.Debugf(ctx, "\n🔍 Debug received response:\n%s\n", string(mustMarshalIndent(resp)))
+				return resp, false, nil
 			}
-
-			mlog.Debugf(ctx, "\n🔍 Debug received response:\n%s\n", string(mustMarshalIndent(resp)))
-
-			goto loop
 		} else {
 			mlog.Warnf(ctx, "Response content is nil")
 		}
 	}
 
-	resp, err := a.chat.SendMessage(ctx, genai.Text("Task may not be finished. Please continue.\n"+
-		"If you have finished the task, please call the 'complete' function.\n"+
-		"If you have any questions, please call the 'askQuestion' function."))
-	if err != nil {
-		mlog.Errorf(ctx, "Failed to send message to AI: %v", err)
-		return fmt.Errorf("failed to send message to AI: %v", err)
-	}
-	mlog.Infof(ctx, "\n🗣️ Please continue the conversation:\n")
-	goto loop
+	return nil, true, nil
 }
 
 func (a *Agent) GetSession() *Session {

@@ -79,6 +79,10 @@ var builtinFunctions = map[string]FunctionDefinition{
 						Type:        genai.TypeString,
 						Description: "git diff を実行するパス",
 					},
+					"staged": {
+						Type:        genai.TypeBoolean,
+						Description: "ステージングエリアの変更を表示するかどうか",
+					},
 				},
 				Required: []string{"path_to_diff"},
 			},
@@ -209,7 +213,13 @@ func handleGitDiff(ctx context.Context, args map[string]any) (map[string]any, er
 		}, nil
 	}
 
-	cmd := exec.Command("git", "diff", "--", pathToDiff)
+	var cmd *exec.Cmd
+	if staged, ok := args["staged"].(bool); ok && staged {
+		cmd = exec.Command("git", "diff", "--staged", "--", pathToDiff)
+	} else {
+		cmd = exec.Command("git", "diff", "--", pathToDiff)
+	}
+
 	output, err := cmd.Output()
 	if err != nil {
 		return map[string]any{
