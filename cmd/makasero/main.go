@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/pankona/makasero"
+	"github.com/pankona/makasero/mlog"
 )
 
 var (
@@ -84,10 +85,12 @@ func run() error {
 	// コンテキストの作成
 	ctx := context.Background()
 
-	// エージェントの作成
-	agentOptions := []makasero.AgentOption{
-		makasero.WithDebug(*debug),
+	if *debug {
+		ctx = mlog.ContextWithDebug(ctx)
 	}
+
+	// エージェントの作成
+	var agentOptions []makasero.AgentOption
 
 	// 既存のセッションを読み込む場合
 	if *sessionID != "" {
@@ -112,31 +115,16 @@ func run() error {
 
 	// 標準エラー出力のキャプチャ
 	stderrReaders := agent.GetStderrReaders()
-	for serverName, reader := range stderrReaders {
-		serverNameCopy := serverName
+	for _, reader := range stderrReaders {
 		go func(r io.Reader) {
-			if *debug {
-				buf := make([]byte, 1024)
-				for {
-					n, err := r.Read(buf)
-					if err != nil {
-						if err != io.EOF {
-							fmt.Fprintf(os.Stderr, "[%s] stderr read error: %v\n", serverNameCopy, err)
-						}
-						return
-					}
-					fmt.Fprintf(os.Stderr, "[%s] %s", serverNameCopy, buf[:n])
-				}
-			} else {
-				io.Copy(os.Stderr, r)
-			}
+			io.Copy(os.Stderr, r)
 		}(reader)
 	}
 
 	// 利用可能な関数の一覧表示
-	fmt.Printf("declared tools: %d\n", len(agent.GetAvailableFunctions()))
+	mlog.Infof(ctx, "Declared tools: %d", len(agent.GetAvailableFunctions()))
 	for _, name := range agent.GetAvailableFunctions() {
-		fmt.Printf("%s\n", name)
+		mlog.Infof(ctx, "%s", name)
 	}
 
 	// メッセージの処理

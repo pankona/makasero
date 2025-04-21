@@ -30,18 +30,11 @@ type Agent struct {
 	session    *Session
 	functions  map[string]FunctionDefinition
 	mcpManager *MCPClientManager
-	debug      bool
 	apiKey     string
 	modelName  string
 }
 
 type AgentOption func(*Agent)
-
-func WithDebug(debug bool) AgentOption {
-	return func(a *Agent) {
-		a.debug = debug
-	}
-}
 
 func WithSession(session *Session) AgentOption {
 	return func(a *Agent) {
@@ -68,12 +61,6 @@ func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...Age
 
 	for _, opt := range opts {
 		opt(agent)
-	}
-
-	if agent.debug {
-		mlog.ConfigureDebug()
-	} else {
-		mlog.Configure(mlog.DefaultConfig())
 	}
 
 	mcpManager := NewMCPClientManager()
@@ -141,11 +128,8 @@ func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...Age
 	}
 
 	mcpManager.SetupNotificationHandlers(func(serverName string, notification mcp.JSONRPCNotification) {
-		if agent.debug {
-			mlog.Debugf(ctx, "[%s] Notification: %v", serverName, notification)
-		} else {
-			agent.handleNotification(notification)
-		}
+		mlog.Debugf(ctx, "[%s] Notification: %v", serverName, notification)
+		agent.handleNotification(notification)
 	})
 
 	return agent, nil
@@ -159,21 +143,15 @@ func (a *Agent) Close() error {
 }
 
 func (a *Agent) ProcessMessage(ctx context.Context, userInput string) error {
-	ctx = mlog.ContextWithSessionID(ctx, a.session.ID)
-
-	if a.debug {
-		ctx = mlog.ContextWithDebug(ctx)
-	}
-
-	mlog.Infof(ctx, "\n--- Start session ---\n")
-	mlog.Infof(ctx, "\n🗣️ Sending message to AI:\n%s\n", strings.TrimSpace(userInput))
+	mlog.Infof(ctx, "--- Start session ---")
+	mlog.Infof(ctx, "🗣️ Sending message to AI:\n%s", strings.TrimSpace(userInput))
 
 	resp, err := a.chat.SendMessage(ctx, genai.Text(userInput))
 	if err != nil {
 		return fmt.Errorf("failed to send message to AI: %v", err)
 	}
 
-	mlog.Debugf(ctx, "\n🔍 Debug received response:\n%s\n", string(mustMarshalIndent(resp)))
+	mlog.Debugf(ctx, "🔍 Debug received response:\n%s", string(mustMarshalIndent(resp)))
 
 	// continue loop until shouldStop is true
 	for {
@@ -197,7 +175,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, userInput string) error {
 				return fmt.Errorf("failed to send message to AI: %v", err)
 			}
 
-			mlog.Infof(ctx, "\n🗣️ Please continue the conversation:\n")
+			mlog.Infof(ctx, "🗣️ Please continue the conversation:")
 			resp = newResp
 
 			continue
@@ -206,7 +184,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, userInput string) error {
 		resp = newResp
 	}
 
-	mlog.Infof(ctx, "\n--- Finish session ---")
+	mlog.Infof(ctx, "--- Finish session ---")
 	a.session.History = a.chat.History
 	a.session.UpdatedAt = time.Now()
 	if err := SaveSession(a.session); err != nil {
@@ -219,24 +197,18 @@ func (a *Agent) ProcessMessage(ctx context.Context, userInput string) error {
 }
 
 func (a *Agent) processResponse(ctx context.Context, resp *genai.GenerateContentResponse) (*genai.GenerateContentResponse, bool, error) {
-	ctx = mlog.ContextWithSessionID(ctx, a.session.ID)
-
-	if a.debug {
-		ctx = mlog.ContextWithDebug(ctx)
-	}
-
 	var functionCallingResponses []genai.FunctionResponse
 
 	for _, cand := range resp.Candidates {
 		if cand.Content != nil {
-			mlog.Debugf(ctx, "\n🔍 len parts: %d\n", len(cand.Content.Parts))
+			mlog.Debugf(ctx, "🔍 len parts: %d", len(cand.Content.Parts))
 			for _, part := range cand.Content.Parts {
 				switch p := part.(type) {
 				case genai.FunctionCall:
-					fnCtx := mlog.ContextWithAttr(ctx, "function", p.Name)
-					mlog.Infof(fnCtx, "\n🔧 AI uses function calling: %s\n", p.Name)
+					fnCtx := context.Background()
+					mlog.Infof(fnCtx, "🔧 AI uses function calling: %s", p.Name)
 
-					mlog.Debugf(fnCtx, "\n🔍 Debug function call:\n%s\n", string(mustMarshalIndent(p)))
+					mlog.Debugf(fnCtx, "🔍 Debug function call:\n%s", string(mustMarshalIndent(p)))
 
 					var result map[string]any
 					if strings.HasPrefix(p.Name, "mcp_") {
@@ -276,13 +248,13 @@ func (a *Agent) processResponse(ctx context.Context, resp *genai.GenerateContent
 						}
 					}
 
-					mlog.Debugf(ctx, "\n🔍 Debug function result:\n%s\n", string(mustMarshalIndent(result)))
+					mlog.Debugf(ctx, "🔍 Debug function result:\n%s", string(mustMarshalIndent(result)))
 					functionCallingResponses = append(functionCallingResponses, genai.FunctionResponse{
 						Name:     p.Name,
 						Response: result,
 					})
 				case genai.Text:
-					mlog.Infof(ctx, "\n🤖 Response from AI:\n%s\n", strings.TrimSpace(string(p)))
+					mlog.Infof(ctx, "🤖 Response from AI:\n%s", strings.TrimSpace(string(p)))
 				default:
 					mlog.Warnf(ctx, "Unknown response type: %T", part)
 				}
@@ -292,14 +264,14 @@ func (a *Agent) processResponse(ctx context.Context, resp *genai.GenerateContent
 				parts := lo.Map(functionCallingResponses, func(fnResp genai.FunctionResponse, _ int) genai.Part { return fnResp })
 
 				var err error
-				mlog.Debugf(ctx, "\n🔍 Debug send message:\n%s\n", string(mustMarshalIndent(parts)))
+				mlog.Debugf(ctx, "🔍 Debug send message:\n%s", string(mustMarshalIndent(parts)))
 				resp, err = a.chat.SendMessage(ctx, parts...)
 				if err != nil {
 					mlog.Errorf(ctx, "Failed to send function response: %v", err)
 					return nil, false, fmt.Errorf("failed to send function response: %v", err)
 				}
 
-				mlog.Debugf(ctx, "\n🔍 Debug received response:\n%s\n", string(mustMarshalIndent(resp)))
+				mlog.Debugf(ctx, "🔍 Debug received response:\n%s", string(mustMarshalIndent(resp)))
 				return resp, false, nil
 			}
 		} else {
@@ -327,7 +299,6 @@ func (a *Agent) LoadSession(sessionID string) error {
 
 func (a *Agent) handleNotification(notification mcp.JSONRPCNotification) {
 	ctx := context.Background()
-	ctx = mlog.ContextWithSessionID(ctx, a.session.ID)
 	mlog.Infof(ctx, "Received notification: %v", notification)
 }
 

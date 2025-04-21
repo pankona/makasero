@@ -5,72 +5,42 @@ package mlog
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
 )
 
-var defaultLogger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-	Level: slog.LevelInfo,
-}))
+type debugKey struct{}
 
-// SetDefaultLogger sets the default logger used when no logger is found in the context.
-func SetDefaultLogger(logger *slog.Logger) {
-	defaultLogger = logger
+// ContextWithDebug creates a new context with debug flag set to true.
+func ContextWithDebug(ctx context.Context) context.Context {
+	return context.WithValue(ctx, debugKey{}, true)
 }
 
-// GetDefaultLogger returns the current default logger.
-func GetDefaultLogger() *slog.Logger {
-	return defaultLogger
+// IsDebugEnabled checks if debug logging is enabled in the context.
+func IsDebugEnabled(ctx context.Context) bool {
+	if debug, ok := ctx.Value(debugKey{}).(bool); ok {
+		return debug
+	}
+	return false
 }
 
 // Debugf logs a message at debug level with printf-style formatting.
-// It retrieves the logger from the context and includes any attributes stored in the context.
+// Only logs if debug is enabled in the context.
 func Debugf(ctx context.Context, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	logger := LoggerFromContext(ctx)
-	
-	if attrs := AttrsFromContext(ctx); len(attrs) > 0 {
-		logger.LogAttrs(ctx, slog.LevelDebug, msg, attrs...)
-	} else {
-		logger.Debug(msg)
+	if IsDebugEnabled(ctx) {
+		fmt.Printf(format+"\n", args...)
 	}
 }
 
 // Infof logs a message at info level with printf-style formatting.
-// It retrieves the logger from the context and includes any attributes stored in the context.
 func Infof(ctx context.Context, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	logger := LoggerFromContext(ctx)
-	
-	if attrs := AttrsFromContext(ctx); len(attrs) > 0 {
-		logger.LogAttrs(ctx, slog.LevelInfo, msg, attrs...)
-	} else {
-		logger.Info(msg)
-	}
+	fmt.Printf(format+"\n", args...)
 }
 
 // Warnf logs a message at warn level with printf-style formatting.
-// It retrieves the logger from the context and includes any attributes stored in the context.
 func Warnf(ctx context.Context, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	logger := LoggerFromContext(ctx)
-	
-	if attrs := AttrsFromContext(ctx); len(attrs) > 0 {
-		logger.LogAttrs(ctx, slog.LevelWarn, msg, attrs...)
-	} else {
-		logger.Warn(msg)
-	}
+	fmt.Printf(format+"\n", args...)
 }
 
 // Errorf logs a message at error level with printf-style formatting.
-// It retrieves the logger from the context and includes any attributes stored in the context.
 func Errorf(ctx context.Context, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	logger := LoggerFromContext(ctx)
-	
-	if attrs := AttrsFromContext(ctx); len(attrs) > 0 {
-		logger.LogAttrs(ctx, slog.LevelError, msg, attrs...)
-	} else {
-		logger.Error(msg)
-	}
+	fmt.Printf(format+"\n", args...)
 }
