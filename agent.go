@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"strings"
 	"time"
 
@@ -85,9 +86,7 @@ func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...Age
 	}
 	agent.model = model
 
-	for name, fn := range builtinFunctions {
-		agent.functions[name] = fn
-	}
+	maps.Copy(agent.functions, builtinFunctions)
 
 	mcpFuncDecls, err := mcpManager.GenerateAllFunctionDefinitions(ctx)
 	if err != nil {
