@@ -27,7 +27,7 @@ func NewMCPClient(serverCmd ServerCmd) (*MCPClient, error) {
 	if serverCmd.Env != nil {
 		env = expandEnvVars(serverCmd.Env)
 	}
-	
+
 	client, err := client.NewStdioMCPClient(
 		serverCmd.Cmd,
 		env,
@@ -54,58 +54,63 @@ func (c *MCPClient) Initialize(ctx context.Context) (InitializeResult, error) {
 	if err != nil {
 		return "", err
 	}
-
 	ret := mustMarshalIndent(result)
 	return InitializeResult(ret), nil
 }
 
-func (c *MCPClient) GenerateFunctionDefinitions(ctx context.Context, prefix string) ([]FunctionDefinition, error) {
+func (c *MCPClient) GenerateFunctionDefinitions(ctx context.Context, serverIdentifier string) ([]FunctionDefinition, error) {
 	tools, err := c.client.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list tools for server '%s': %w", serverIdentifier, err)
 	}
 
 	ret := make([]FunctionDefinition, 0, len(tools.Tools))
+
 	for _, tool := range tools.Tools {
+		toolName := tool.Name
+
+		declaration := &genai.FunctionDeclaration{
+			Name:        toolName,
+			Description: tool.Description,
+			Parameters: &genai.Schema{
+				Type:       genai.TypeObject,
+				Properties: c.convertMCPParameters(tool.InputSchema),
+			},
+		}
+
+		handler := func(ctx context.Context, args map[string]any) (map[string]any, error) {
+			result, err := c.callMCPTool(toolName, args)
+			if err != nil {
+				return nil, fmt.Errorf("error calling tool '%s' on server '%s': %w", toolName, serverIdentifier, err)
+			}
+
+			mcpResult, ok := result.(*mcp.CallToolResult)
+			if !ok {
+				return nil, fmt.Errorf("unexpected result type from tool '%s' on server '%s': %T", toolName, serverIdentifier, result)
+			}
+
+			var contents []string
+			for _, content := range mcpResult.Content {
+				if textContent, ok := content.(mcp.TextContent); ok {
+					contents = append(contents, textContent.Text)
+				} else {
+					contents = append(contents, fmt.Sprintf("%v", content))
+				}
+			}
+
+			resultMap := map[string]any{
+				"is_error": mcpResult.IsError,
+				"content":  strings.Join(contents, "\n"),
+			}
+			if mcpResult.Result.Meta != nil {
+				resultMap["meta"] = mcpResult.Result.Meta
+			}
+			return resultMap, nil
+		}
+
 		ret = append(ret, FunctionDefinition{
-			Declaration: &genai.FunctionDeclaration{
-				Name:        fmt.Sprintf("mcp_%s_%s", prefix, tool.Name),
-				Description: tool.Description,
-				Parameters: &genai.Schema{
-					Type:       genai.TypeObject,
-					Properties: c.convertMCPParameters(tool.InputSchema),
-				},
-			},
-			Handler: func(ctx context.Context, args map[string]any) (map[string]any, error) {
-				result, err := c.callMCPTool(tool.Name, args)
-				if err != nil {
-					return nil, err
-				}
-
-				mcpResult, ok := result.(*mcp.CallToolResult)
-				if !ok {
-					return nil, fmt.Errorf("unexpected result type: %T", result)
-				}
-
-				var contents []string
-				for _, content := range mcpResult.Content {
-					if textContent, ok := content.(mcp.TextContent); ok {
-						contents = append(contents, textContent.Text)
-					} else {
-						contents = append(contents, fmt.Sprintf("%v", content))
-					}
-				}
-
-				resultMap := map[string]any{
-					"is_error": mcpResult.IsError,
-					"content":  strings.Join(contents, "\n"),
-				}
-				if mcpResult.Result.Meta != nil {
-					resultMap["meta"] = mcpResult.Result.Meta
-				}
-
-				return resultMap, nil
-			},
+			Declaration: declaration,
+			Handler:     handler,
 		})
 	}
 
@@ -116,13 +121,13 @@ func (c *MCPClient) OnNotification(handler func(notification mcp.JSONRPCNotifica
 	c.client.OnNotification(handler)
 }
 
-func (c *MCPClient) callMCPTool(name string, args map[string]any) (interface{}, error) {
+func (c *MCPClient) callMCPTool(toolName string, args map[string]any) (interface{}, error) {
 	req := mcp.CallToolRequest{}
-	req.Params.Name = name
+	req.Params.Name = toolName
 	req.Params.Arguments = args
 	result, err := c.client.CallTool(context.Background(), req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to call MCP tool '%s': %w", toolName, err)
 	}
 	return result, nil
 }
@@ -218,7 +223,7 @@ func (c *MCPClient) convertSchemaType(schemaType string) genai.Type {
 	case "object":
 		return genai.TypeObject
 	default:
-		return genai.TypeString // デフォルトは string
+		return genai.TypeString // Default to string
 	}
 }
 
