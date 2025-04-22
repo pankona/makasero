@@ -58,8 +58,6 @@ func (c *MCPClient) Initialize(ctx context.Context) (InitializeResult, error) {
 	return InitializeResult(ret), nil
 }
 
-// FunctionDefinition is defined in functions.go
-
 func (c *MCPClient) GenerateFunctionDefinitions(ctx context.Context, serverIdentifier string) ([]FunctionDefinition, error) {
 	tools, err := c.client.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
