@@ -156,11 +156,11 @@ func (m *MCPClientManager) CallMCPTool(ctx context.Context, fullName string, arg
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if resultMap, ok := result.(map[string]any); ok {
 		return resultMap, nil
 	}
-	
+
 	if mcpResult, ok := result.(*mcp.CallToolResult); ok {
 		var contents []string
 		for _, content := range mcpResult.Content {
@@ -181,7 +181,7 @@ func (m *MCPClientManager) CallMCPTool(ctx context.Context, fullName string, arg
 
 		return resultMap, nil
 	}
-	
+
 	return nil, fmt.Errorf("unexpected result type from callMCPTool: %T", result)
 }
 
