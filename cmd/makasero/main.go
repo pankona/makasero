@@ -92,16 +92,18 @@ func run() error {
 	// エージェントの作成
 	var agentOptions []makasero.AgentOption
 
-	// 既存のセッションを読み込む場合、または新規セッションの開始
+	// セッションIDが指定されている場合
 	if *sessionID != "" {
-		if *sessionID == "new" {
-		} else {
-			// 既存のセッションIDが指定された場合は読み込む
+		if makasero.SessionExists(*sessionID) {
+			// 既存のセッションを読み込む
 			session, err := makasero.LoadSession(*sessionID)
 			if err != nil {
 				return err
 			}
 			agentOptions = append(agentOptions, makasero.WithSession(session))
+		} else {
+			agentOptions = append(agentOptions, makasero.WithCustomSessionID(*sessionID))
+			fmt.Printf("新しいセッションを開始します。セッションID: %s\n", *sessionID)
 		}
 	}
 

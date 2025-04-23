@@ -11,7 +11,7 @@ AIエージェントを実装したコマンドラインツールです。
 - `-debug`: デバッグモードを有効にする
 - `-f`: プロンプトファイルのパスを指定
 - `-ls`: 利用可能なセッション一覧を表示
-- `-s`: 継続するセッションIDを指定（"new"を指定すると新規セッションを開始）
+- `-s`: 継続するセッションIDを指定（存在しないIDを指定すると新規セッションを開始）
 - `-sh`: 指定したセッションIDの会話履歴全文を表示
 
 ## 実行例
@@ -34,9 +34,8 @@ Messages: 8
 
 新規セッションの開始：
 ```bash
-$ go run ./cmd/makasero -s new "Hello, AI"
-新しいセッションを開始しました。
-セッションID: 20250408123456_abcdef12
+$ go run ./cmd/makasero -s my_custom_session_id "Hello, AI"
+新しいセッションを開始します。セッションID: my_custom_session_id
 ...
 ```
 
@@ -65,4 +64,4 @@ $ go run ./cmd/makasero -sh 20250407222639_5f459f5e
 
 ## License
 
-MIT License    
+MIT License        

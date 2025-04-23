@@ -106,6 +106,12 @@ func (s *Session) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func SessionExists(id string) bool {
+	path := filepath.Join(sessionDir, id+".json")
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 func LoadSession(id string) (*Session, error) {
 	path := filepath.Join(sessionDir, id+".json")
 	data, err := os.ReadFile(path)
