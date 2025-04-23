@@ -17,7 +17,7 @@ var (
 	promptFile       = flag.String("f", "", "prompt file")
 	configFilePath   = flag.String("config", "", "path to config file")
 	listSessionsFlag = flag.Bool("ls", false, "利用可能なセッション一覧を表示")
-	sessionID        = flag.String("s", "", "継続するセッションID")
+	sessionID        = flag.String("s", "", "継続するセッションID (\"new\"を指定すると新規セッションを開始)")
 	showHistory      = flag.String("sh", "", "指定したセッションIDの会話履歴全文を表示")
 )
 
@@ -92,13 +92,17 @@ func run() error {
 	// エージェントの作成
 	var agentOptions []makasero.AgentOption
 
-	// 既存のセッションを読み込む場合
+	// 既存のセッションを読み込む場合、または新規セッションの開始
 	if *sessionID != "" {
-		session, err := makasero.LoadSession(*sessionID)
-		if err != nil {
-			return err
+		if *sessionID == "new" {
+		} else {
+			// 既存のセッションIDが指定された場合は読み込む
+			session, err := makasero.LoadSession(*sessionID)
+			if err != nil {
+				return err
+			}
+			agentOptions = append(agentOptions, makasero.WithSession(session))
 		}
-		agentOptions = append(agentOptions, makasero.WithSession(session))
 	}
 
 	// モデル名が指定されている場合
