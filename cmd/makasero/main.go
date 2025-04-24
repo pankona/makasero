@@ -103,7 +103,7 @@ func run() error {
 			agentOptions = append(agentOptions, makasero.WithSession(session))
 		} else {
 			agentOptions = append(agentOptions, makasero.WithCustomSessionID(*sessionID))
-			fmt.Printf("新しいセッションを開始します。セッションID: %s\n", *sessionID)
+			mlog.Infof(ctx, "新しいセッションを開始します。セッションID: %s", *sessionID)
 		}
 	}
 
