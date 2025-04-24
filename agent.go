@@ -43,6 +43,15 @@ func WithSession(session *Session) AgentOption {
 	}
 }
 
+func WithCustomSessionID(id string) AgentOption {
+	return func(a *Agent) {
+		a.session = &Session{
+			ID:        id,
+			CreatedAt: time.Now(),
+		}
+	}
+}
+
 func WithModelName(modelName string) AgentOption {
 	return func(a *Agent) {
 		a.modelName = modelName
