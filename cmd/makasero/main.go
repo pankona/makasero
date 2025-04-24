@@ -17,7 +17,7 @@ var (
 	promptFile       = flag.String("f", "", "prompt file")
 	configFilePath   = flag.String("config", "", "path to config file")
 	listSessionsFlag = flag.Bool("ls", false, "利用可能なセッション一覧を表示")
-	sessionID        = flag.String("s", "", "継続するセッションID (\"new\"を指定すると新規セッションを開始)")
+	sessionID        = flag.String("s", "", "継続するセッションID（存在しないIDを指定すると新規セッションを開始）")
 	showHistory      = flag.String("sh", "", "指定したセッションIDの会話履歴全文を表示")
 )
 
