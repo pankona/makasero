@@ -64,4 +64,4 @@ $ go run ./cmd/makasero -sh 20250407222639_5f459f5e
 
 ## License
 
-MIT License        
+MIT License
