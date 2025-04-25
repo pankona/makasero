@@ -1,0 +1,325 @@
+package main
+
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type CreateTaskRequest struct {
+	Prompt string `json:"prompt"`
+}
+
+type CreateTaskResponse struct {
+	TaskID string `json:"task_id"`
+	Status string `json:"status"`
+}
+
+type SendCommandRequest struct {
+	Command string `json:"command"`
+}
+
+type SendCommandResponse struct {
+	Message string `json:"message"`
+}
+
+type TaskManager struct{}
+
+func NewTaskManager() *TaskManager {
+	return &TaskManager{}
+}
+
+func (tm *TaskManager) StartTask(prompt string) (string, error) {
+	taskID := uuid.New().String()
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+	
+	makaseroDir := filepath.Join(homeDir, ".makasero")
+	if err := os.MkdirAll(makaseroDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create .makasero directory: %w", err)
+	}
+	
+	sessionsDir := filepath.Join(makaseroDir, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create sessions directory: %w", err)
+	}
+	
+	configPath := filepath.Join(makaseroDir, "config.json")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		defaultConfig := []byte(`{"mcpServers":{}}`)
+		if err := ioutil.WriteFile(configPath, defaultConfig, 0644); err != nil {
+			return "", fmt.Errorf("failed to create config file: %w", err)
+		}
+	}
+	
+	log.Printf("Starting task with ID: %s", taskID)
+	log.Printf("Home directory: %s", homeDir)
+	log.Printf("Config path: %s", configPath)
+	log.Printf("Sessions directory: %s", sessionsDir)
+
+	makaseroMainPath := filepath.Join(os.Getenv("HOME"), "repos", "makasero", "cmd", "makasero", "main.go")
+	cmd := exec.Command("go", "run", makaseroMainPath, "-debug", "-config", configPath, "-s", taskID, prompt)
+
+	cmd.Dir = filepath.Join(os.Getenv("HOME"), "repos", "makasero")
+
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		return "", fmt.Errorf("GEMINI_API_KEY environment variable is not set")
+	}
+	
+	modelName := os.Getenv("MODEL_NAME")
+	if modelName == "" {
+		modelName = "gemini-2.0-flash-lite" // Default model
+	}
+	
+	cmd.Env = append(os.Environ(), "MODEL_NAME="+modelName)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start task: %w", err)
+	}
+
+	log.Printf("Started process with PID: %d", cmd.Process.Pid)
+
+	cmd.Process.Release()
+
+	return taskID, nil
+}
+
+func (tm *TaskManager) SendCommand(taskID, command string) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+	
+	makaseroDir := filepath.Join(homeDir, ".makasero")
+	if err := os.MkdirAll(makaseroDir, 0755); err != nil {
+		return fmt.Errorf("failed to create .makasero directory: %w", err)
+	}
+	
+	sessionsDir := filepath.Join(makaseroDir, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create sessions directory: %w", err)
+	}
+	
+	configPath := filepath.Join(makaseroDir, "config.json")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		defaultConfig := []byte(`{"mcpServers":{}}`)
+		if err := ioutil.WriteFile(configPath, defaultConfig, 0644); err != nil {
+			return fmt.Errorf("failed to create config file: %w", err)
+		}
+	}
+
+	makaseroMainPath := filepath.Join(os.Getenv("HOME"), "repos", "makasero", "cmd", "makasero", "main.go")
+	cmd := exec.Command("go", "run", makaseroMainPath, "-debug", "-config", configPath, "-s", taskID, command)
+
+	cmd.Dir = filepath.Join(os.Getenv("HOME"), "repos", "makasero")
+
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		return fmt.Errorf("GEMINI_API_KEY environment variable is not set")
+	}
+	
+	modelName := os.Getenv("MODEL_NAME")
+	if modelName == "" {
+		modelName = "gemini-2.0-flash-lite" // Default model
+	}
+	
+	cmd.Env = append(os.Environ(), "MODEL_NAME="+modelName)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to send command: %w", err)
+	}
+
+	log.Printf("Started process with PID: %d", cmd.Process.Pid)
+
+	cmd.Process.Release()
+
+	return nil
+}
+
+func (tm *TaskManager) GetTaskStatus(taskID string) ([]byte, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	possiblePaths := []string{
+		filepath.Join(homeDir, ".makasero", "sessions", taskID+".json"),
+		filepath.Join(os.Getenv("HOME"), "repos", "makasero", ".makasero", "sessions", taskID+".json"),
+	}
+
+	maxRetries := 3
+	retryDelay := 500 * time.Millisecond
+
+	for _, sessionFilePath := range possiblePaths {
+		log.Printf("Checking for session file at: %s", sessionFilePath)
+		
+		for i := 0; i < maxRetries; i++ {
+			if _, err := os.Stat(sessionFilePath); err == nil {
+				data, err := ioutil.ReadFile(sessionFilePath)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read session file: %w", err)
+				}
+				return data, nil
+			} else if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("failed to check session file: %w", err)
+			}
+
+			if i < maxRetries-1 {
+				time.Sleep(retryDelay)
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("task not found: %s", taskID)
+}
+
+func handleCreateTask(w http.ResponseWriter, r *http.Request, tm *TaskManager) {
+	var req CreateTaskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Prompt == "" {
+		http.Error(w, "Prompt is required", http.StatusBadRequest)
+		return
+	}
+
+	taskID, err := tm.StartTask(req.Prompt)
+	if err != nil {
+		http.Error(w, "Failed to start task: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := CreateTaskResponse{
+		TaskID: taskID,
+		Status: "pending",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
+}
+
+func handleSendCommand(w http.ResponseWriter, r *http.Request, tm *TaskManager, taskID string) {
+	var req SendCommandRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Command == "" {
+		http.Error(w, "Command is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := tm.SendCommand(taskID, req.Command); err != nil {
+		http.Error(w, "Failed to send command: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := SendCommandResponse{
+		Message: "Command accepted",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func handleGetTaskStatus(w http.ResponseWriter, r *http.Request, tm *TaskManager, taskID string) {
+	data, err := tm.GetTaskStatus(taskID)
+	if err != nil {
+		if err.Error() == "task not found: "+taskID {
+			http.Error(w, "Task not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Failed to get task status: "+err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func main() {
+	port := flag.String("port", "8080", "Port to listen on")
+	flag.Parse()
+
+	taskManager := NewTaskManager()
+
+	http.HandleFunc("/api/tasks", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			handleCreateTask(w, r, taskManager)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/api/tasks/", func(w http.ResponseWriter, r *http.Request) {
+		pathSegments := strings.Split(r.URL.Path, "/")
+		if len(pathSegments) < 4 {
+			http.Error(w, "Invalid path", http.StatusBadRequest)
+			return
+		}
+
+		taskID := pathSegments[3]
+
+		if len(pathSegments) == 4 {
+			if r.Method == http.MethodGet {
+				handleGetTaskStatus(w, r, taskManager, taskID)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		} else if len(pathSegments) == 5 && pathSegments[4] == "commands" {
+			if r.Method == http.MethodPost {
+				handleSendCommand(w, r, taskManager, taskID)
+			} else {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+		} else {
+			http.Error(w, "Invalid path", http.StatusBadRequest)
+		}
+	})
+
+	handler := corsMiddleware(http.DefaultServeMux)
+
+	log.Printf("Starting server on :%s", *port)
+	if err := http.ListenAndServe(":"+*port, handler); err != nil {
+		log.Fatal(err)
+	}
+}
