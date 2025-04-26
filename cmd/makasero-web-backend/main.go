@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -88,7 +87,7 @@ func (tm *TaskManager) StartTask(prompt string) (string, error) {
 	configPath := filepath.Join(makaseroDir, "config.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultConfig := []byte(`{"mcpServers":{}}`)
-		if err := ioutil.WriteFile(configPath, defaultConfig, 0644); err != nil {
+		if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
 			return "", fmt.Errorf("failed to create config file '%s': %w", configPath, err)
 		}
 	}
@@ -184,7 +183,7 @@ func (tm *TaskManager) SendCommand(taskID, command string) error {
 	configPath := filepath.Join(makaseroDir, "config.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultConfig := []byte(`{"mcpServers":{}}`)
-		if err := ioutil.WriteFile(configPath, defaultConfig, 0644); err != nil {
+		if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
 			return fmt.Errorf("failed to create config file '%s': %w", configPath, err)
 		}
 	}
@@ -274,13 +273,13 @@ func (tm *TaskManager) GetTaskStatus(taskID string) ([]byte, error) {
 
 		for i := 0; i < maxRetries; i++ {
 			if _, err := os.Stat(sessionFilePath); err == nil {
-				data, err := ioutil.ReadFile(sessionFilePath)
+				data, err := os.ReadFile(sessionFilePath)
 				if err != nil {
-					return nil, fmt.Errorf("failed to read session file: %w", err)
+					return nil, fmt.Errorf("failed to read session file '%s': %w", sessionFilePath, err)
 				}
 				return data, nil
 			} else if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to check session file: %w", err)
+				return nil, fmt.Errorf("failed to check session file '%s': %w", sessionFilePath, err)
 			}
 
 			if i < maxRetries-1 {
