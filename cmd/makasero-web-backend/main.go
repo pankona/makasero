@@ -33,10 +33,37 @@ type SendCommandResponse struct {
 	Message string `json:"message"`
 }
 
-type TaskManager struct{}
+type TaskManager struct {
+	makaseroCmd []string // 実行するコマンドと引数
+}
 
 func NewTaskManager() *TaskManager {
-	return &TaskManager{}
+	cmdStr := os.Getenv("MAKASERO_COMMAND")
+	var cmdArgs []string
+
+	if cmdStr != "" {
+		// 環境変数で指定されたコマンドをスペースで分割
+		cmdArgs = strings.Fields(cmdStr)
+	} else {
+		// デフォルトのコマンド
+		// 環境変数から取得できない場合のフォールバックを追加
+		homeDir := os.Getenv("HOME")
+		if homeDir == "" {
+			// WindowsなどHOMEがない場合
+			homeDir = os.Getenv("USERPROFILE")
+		}
+		// Note: ここで homeDir が空だと panic する可能性があるため、エラーハンドリングを追加してもよい
+		makaseroRepoPath := filepath.Join(homeDir, "repos", "makasero") // 仮のパス、必要に応じて調整
+		// cmd/makasero/main.go へのパスを組み立てる
+		makaseroMainPath := filepath.Join(makaseroRepoPath, "cmd", "makasero", "main.go")
+		cmdArgs = []string{"go", "run", makaseroMainPath}
+	}
+
+	log.Printf("Using command: %v", cmdArgs) // どのコマンドを使うかログ出力
+
+	return &TaskManager{
+		makaseroCmd: cmdArgs,
+	}
 }
 
 func (tm *TaskManager) StartTask(prompt string) (string, error) {
@@ -44,59 +71,95 @@ func (tm *TaskManager) StartTask(prompt string) (string, error) {
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
+		log.Printf("Error getting user home directory: %v. Falling back to current directory for .makasero.", err)
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
-	
+
 	makaseroDir := filepath.Join(homeDir, ".makasero")
 	if err := os.MkdirAll(makaseroDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create .makasero directory: %w", err)
 	}
-	
+
 	sessionsDir := filepath.Join(makaseroDir, "sessions")
 	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create sessions directory: %w", err)
 	}
-	
+
 	configPath := filepath.Join(makaseroDir, "config.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultConfig := []byte(`{"mcpServers":{}}`)
 		if err := ioutil.WriteFile(configPath, defaultConfig, 0644); err != nil {
-			return "", fmt.Errorf("failed to create config file: %w", err)
+			return "", fmt.Errorf("failed to create config file '%s': %w", configPath, err)
 		}
 	}
-	
+
 	log.Printf("Starting task with ID: %s", taskID)
 	log.Printf("Home directory: %s", homeDir)
 	log.Printf("Config path: %s", configPath)
 	log.Printf("Sessions directory: %s", sessionsDir)
 
-	makaseroMainPath := filepath.Join(os.Getenv("HOME"), "repos", "makasero", "cmd", "makasero", "main.go")
-	cmd := exec.Command("go", "run", makaseroMainPath, "-debug", "-config", configPath, "-s", taskID, prompt)
+	if len(tm.makaseroCmd) == 0 {
+		return "", fmt.Errorf("makasero command is not configured in TaskManager")
+	}
+	baseArgs := make([]string, len(tm.makaseroCmd)-1)
+	copy(baseArgs, tm.makaseroCmd[1:])
+	args := append(baseArgs, "-debug", "-config", configPath, "-s", taskID, prompt)
+	cmd := exec.Command(tm.makaseroCmd[0], args...)
 
-	cmd.Dir = filepath.Join(os.Getenv("HOME"), "repos", "makasero")
+	if os.Getenv("MAKASERO_COMMAND") == "" {
+		cmdDirHome := os.Getenv("HOME")
+		if cmdDirHome == "" {
+			cmdDirHome = os.Getenv("USERPROFILE")
+		}
+		if cmdDirHome != "" {
+			repoDir := filepath.Join(cmdDirHome, "repos", "makasero")
+			if _, err := os.Stat(repoDir); err == nil {
+				cmd.Dir = repoDir
+			} else {
+				log.Printf("Warning: Default command directory '%s' not found, using current working directory.", repoDir)
+				wd, _ := os.Getwd()
+				cmd.Dir = wd
+			}
+		} else {
+			wd, _ := os.Getwd()
+			cmd.Dir = wd
+			log.Printf("Warning: HOME or USERPROFILE not set, using current working directory '%s' for command execution", cmd.Dir)
+		}
+	} else {
+		log.Printf("MAKASERO_COMMAND is set, not setting cmd.Dir explicitly.")
+	}
 
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
 		return "", fmt.Errorf("GEMINI_API_KEY environment variable is not set")
 	}
-	
+
 	modelName := os.Getenv("MODEL_NAME")
 	if modelName == "" {
 		modelName = "gemini-2.0-flash-lite" // Default model
 	}
-	
-	cmd.Env = append(os.Environ(), "MODEL_NAME="+modelName)
+
+	cmd.Env = append([]string{}, os.Environ()...)
+	cmd.Env = append(cmd.Env, "MODEL_NAME="+modelName)
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("failed to start task: %w", err)
+		log.Printf("Failed to start command '%s' with args %v in dir '%s': %v", tm.makaseroCmd[0], args, cmd.Dir, err)
+		return "", fmt.Errorf("failed to start task process: %w", err)
 	}
 
-	log.Printf("Started process with PID: %d", cmd.Process.Pid)
+	log.Printf("Started process with PID: %d for task %s", cmd.Process.Pid, taskID)
 
-	cmd.Process.Release()
+	if cmd.Process != nil {
+		err = cmd.Process.Release()
+		if err != nil {
+			log.Printf("Warning: Failed to release process %d for task %s: %v", cmd.Process.Pid, taskID, err)
+		}
+	} else {
+		log.Printf("Warning: Command start for task %s succeeded but process is nil. Args: %v", taskID, args)
+	}
 
 	return taskID, nil
 }
@@ -104,54 +167,90 @@ func (tm *TaskManager) StartTask(prompt string) (string, error) {
 func (tm *TaskManager) SendCommand(taskID, command string) error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
+		log.Printf("Error getting user home directory: %v. Falling back to current directory for .makasero.", err)
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
-	
+
 	makaseroDir := filepath.Join(homeDir, ".makasero")
 	if err := os.MkdirAll(makaseroDir, 0755); err != nil {
 		return fmt.Errorf("failed to create .makasero directory: %w", err)
 	}
-	
+
 	sessionsDir := filepath.Join(makaseroDir, "sessions")
 	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create sessions directory: %w", err)
 	}
-	
+
 	configPath := filepath.Join(makaseroDir, "config.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultConfig := []byte(`{"mcpServers":{}}`)
 		if err := ioutil.WriteFile(configPath, defaultConfig, 0644); err != nil {
-			return fmt.Errorf("failed to create config file: %w", err)
+			return fmt.Errorf("failed to create config file '%s': %w", configPath, err)
 		}
 	}
 
-	makaseroMainPath := filepath.Join(os.Getenv("HOME"), "repos", "makasero", "cmd", "makasero", "main.go")
-	cmd := exec.Command("go", "run", makaseroMainPath, "-debug", "-config", configPath, "-s", taskID, command)
+	if len(tm.makaseroCmd) == 0 {
+		return fmt.Errorf("makasero command is not configured in TaskManager")
+	}
+	baseArgs := make([]string, len(tm.makaseroCmd)-1)
+	copy(baseArgs, tm.makaseroCmd[1:])
+	args := append(baseArgs, "-debug", "-config", configPath, "-s", taskID, command)
+	cmd := exec.Command(tm.makaseroCmd[0], args...)
 
-	cmd.Dir = filepath.Join(os.Getenv("HOME"), "repos", "makasero")
+	if os.Getenv("MAKASERO_COMMAND") == "" {
+		cmdDirHome := os.Getenv("HOME")
+		if cmdDirHome == "" {
+			cmdDirHome = os.Getenv("USERPROFILE")
+		}
+		if cmdDirHome != "" {
+			repoDir := filepath.Join(cmdDirHome, "repos", "makasero")
+			if _, err := os.Stat(repoDir); err == nil {
+				cmd.Dir = repoDir
+			} else {
+				log.Printf("Warning: Default command directory '%s' not found, using current working directory.", repoDir)
+				wd, _ := os.Getwd()
+				cmd.Dir = wd
+			}
+		} else {
+			wd, _ := os.Getwd()
+			cmd.Dir = wd
+			log.Printf("Warning: HOME or USERPROFILE not set, using current working directory '%s' for command execution", cmd.Dir)
+		}
+	} else {
+		log.Printf("MAKASERO_COMMAND is set, not setting cmd.Dir explicitly.")
+	}
 
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
 		return fmt.Errorf("GEMINI_API_KEY environment variable is not set")
 	}
-	
+
 	modelName := os.Getenv("MODEL_NAME")
 	if modelName == "" {
 		modelName = "gemini-2.0-flash-lite" // Default model
 	}
-	
-	cmd.Env = append(os.Environ(), "MODEL_NAME="+modelName)
+
+	cmd.Env = append([]string{}, os.Environ()...)
+	cmd.Env = append(cmd.Env, "MODEL_NAME="+modelName)
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to send command: %w", err)
+		log.Printf("Failed to start command '%s' with args %v in dir '%s': %v", tm.makaseroCmd[0], args, cmd.Dir, err)
+		return fmt.Errorf("failed to send command process: %w", err)
 	}
 
-	log.Printf("Started process with PID: %d", cmd.Process.Pid)
+	log.Printf("Started process with PID: %d for sending command to task %s", cmd.Process.Pid, taskID)
 
-	cmd.Process.Release()
+	if cmd.Process != nil {
+		err = cmd.Process.Release()
+		if err != nil {
+			log.Printf("Warning: Failed to release process %d for task %s command: %v", cmd.Process.Pid, taskID, err)
+		}
+	} else {
+		log.Printf("Warning: Command start for task %s command succeeded but process is nil. Args: %v", taskID, args)
+	}
 
 	return nil
 }
@@ -172,7 +271,7 @@ func (tm *TaskManager) GetTaskStatus(taskID string) ([]byte, error) {
 
 	for _, sessionFilePath := range possiblePaths {
 		log.Printf("Checking for session file at: %s", sessionFilePath)
-		
+
 		for i := 0; i < maxRetries; i++ {
 			if _, err := os.Stat(sessionFilePath); err == nil {
 				data, err := ioutil.ReadFile(sessionFilePath)
@@ -249,8 +348,8 @@ func handleSendCommand(w http.ResponseWriter, r *http.Request, tm *TaskManager, 
 func handleGetTaskStatus(w http.ResponseWriter, r *http.Request, tm *TaskManager, taskID string) {
 	data, err := tm.GetTaskStatus(taskID)
 	if err != nil {
-		if err.Error() == "task not found: "+taskID {
-			http.Error(w, "Task not found", http.StatusNotFound)
+		if strings.Contains(err.Error(), "task not found") {
+			http.Error(w, fmt.Sprintf("Task not found: %s", taskID), http.StatusNotFound)
 		} else {
 			http.Error(w, "Failed to get task status: "+err.Error(), http.StatusInternalServerError)
 		}
