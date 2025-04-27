@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -253,17 +252,5 @@ func createDummySession(id string) *makasero.Session {
 				},
 			},
 		},
-	}
-}
-
-// セッションファイルを書き込むヘルパー
-func writeSessionFile(t *testing.T, sessionsDir string, session *makasero.Session) {
-	filePath := filepath.Join(sessionsDir, session.ID+".json")
-	data, err := json.MarshalIndent(session, "", "  ")
-	if err != nil {
-		t.Fatalf("Failed to marshal dummy session: %v", err)
-	}
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
-		t.Fatalf("Failed to write dummy session file %s: %v", filePath, err)
 	}
 }
