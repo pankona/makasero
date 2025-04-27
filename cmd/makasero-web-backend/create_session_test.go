@@ -5,16 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
 func TestHandleCreateSession(t *testing.T) {
 	tempDir := t.TempDir()
-	makaseroDir := filepath.Join(tempDir, ".makasero")
-	sessionsDir := filepath.Join(makaseroDir, "sessions")
-	configPath := filepath.Join(makaseroDir, "config.json")
+	_, _, _ = SetupTestEnvironment(t, tempDir)
 
 	tests := []struct {
 		name           string
@@ -60,15 +56,6 @@ func TestHandleCreateSession(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			SetupFakeHomeDir(t, tempDir)
-			if err := os.MkdirAll(sessionsDir, 0755); err != nil {
-				t.Fatalf("テスト用ディレクトリの作成に失敗: %v", err)
-			}
-			defaultConfig := []byte(`{"mcpServers":{}}`)
-			if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
-				t.Fatalf("テスト用設定ファイルの作成に失敗: %v", err)
-			}
-
 			sm := setupTestSessionManager(t)
 
 			body, _ := json.Marshal(tt.requestBody)
@@ -82,7 +69,7 @@ func TestHandleCreateSession(t *testing.T) {
 				if err := json.NewDecoder(bytes.NewReader(rr.Body.Bytes())).Decode(&resp); err == nil {
 					generatedSessionID = resp.SessionID
 				} else {
-					t.Logf("正常リクエストのはずがレスポンスのデコードに失敗: %v", err)
+					t.Errorf("正常リクエストのはずがレスポンスのデコードに失敗: %v", err)
 				}
 			}
 

@@ -13,21 +13,19 @@ import (
 
 func TestHandleGetSessionStatus(t *testing.T) {
 	tempDir := t.TempDir()
-	makaseroDir := filepath.Join(tempDir, ".makasero")
-	sessionsDir := filepath.Join(makaseroDir, "sessions")
-	configPath := filepath.Join(makaseroDir, "config.json")
+	_, sessionsDir, _ := SetupTestEnvironment(t, tempDir)
 
 	tests := []struct {
 		name             string
 		sessionID        string
-		setupSessionFile func(t *testing.T)
+		setupSessionFile func(t *testing.T, sessionsDir string)
 		expectedStatus   int
 		checkResponse    func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
 			name:      "存在しないセッション",
 			sessionID: "non-existent-session",
-			setupSessionFile: func(t *testing.T) {
+			setupSessionFile: func(t *testing.T, sessionsDir string) {
 			},
 			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -41,7 +39,7 @@ func TestHandleGetSessionStatus(t *testing.T) {
 		{
 			name:      "存在するセッション",
 			sessionID: "existing-session",
-			setupSessionFile: func(t *testing.T) {
+			setupSessionFile: func(t *testing.T, sessionsDir string) {
 				sessionFilePath := filepath.Join(sessionsDir, "existing-session.json")
 				dummyData := `{"id": "existing-session", "status": "running"}`
 				if err := os.WriteFile(sessionFilePath, []byte(dummyData), 0644); err != nil {
@@ -68,15 +66,7 @@ func TestHandleGetSessionStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			SetupFakeHomeDir(t, tempDir)
-			if err := os.MkdirAll(sessionsDir, 0755); err != nil {
-				t.Fatalf("テスト用ディレクトリの作成に失敗: %v", err)
-			}
-			defaultConfig := []byte(`{"mcpServers":{}}`)
-			if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
-				t.Fatalf("テスト用設定ファイルの作成に失敗: %v", err)
-			}
-			tt.setupSessionFile(t)
+			tt.setupSessionFile(t, sessionsDir)
 
 			sm := setupTestSessionManager(t)
 
