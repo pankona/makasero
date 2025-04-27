@@ -71,8 +71,14 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 func (s *Session) UnmarshalJSON(data []byte) error {
 	type Alias Session
 	aux := &struct{ *Alias }{Alias: (*Alias)(s)}
+
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
+	}
+
+	// SerializedHistoryがnilまたは空の場合は空のスライスで初期化
+	if s.SerializedHistory == nil {
+		s.SerializedHistory = []*SerializableContent{}
 	}
 
 	s.History = make([]*genai.Content, len(s.SerializedHistory))
@@ -94,9 +100,19 @@ func (s *Session) UnmarshalJSON(data []byte) error {
 				}
 			case "function_response":
 				fr := part.Content.(map[string]interface{})
+				name := fr["Name"].(string)
+				var response map[string]interface{}
+
+				// Responseがnullの場合は空のマップを使用
+				if fr["Response"] != nil {
+					response = fr["Response"].(map[string]interface{})
+				} else {
+					response = make(map[string]interface{})
+				}
+
 				content.Parts[j] = genai.FunctionResponse{
-					Name:     fr["Name"].(string),
-					Response: fr["Response"].(map[string]interface{}),
+					Name:     name,
+					Response: response,
 				}
 			}
 		}

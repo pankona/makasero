@@ -1,0 +1,210 @@
+openapi: 3.0.0
+info:
+  title: makasero Web Backend API
+  description: makasero Web BackendのREST API仕様
+  version: 1.0.0
+servers:
+  - url: /api
+    description: makasero Web Backend API エンドポイント
+paths:
+  /sessions:
+    post:
+      summary: 新しいセッションを作成する
+      description: ユーザープロンプトを受け取り、非同期で処理を開始する新しいセッションを作成します
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '202':
+          description: セッションが正常に作成され、処理が開始されました
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSessionResponse'
+        '400':
+          description: 無効なリクエストパラメータ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /sessions/{sessionId}:
+    get:
+      summary: セッションの状態を取得する
+      description: 指定されたセッションIDの現在の状態を取得します
+      operationId: getSessionStatus
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 取得するセッションのID
+      responses:
+        '200':
+          description: セッション情報が正常に取得されました
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '404':
+          description: 指定されたセッションIDが見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /sessions/{sessionId}/commands:
+    post:
+      summary: セッションにコマンドを送信する
+      description: 既存のセッションに新しいコマンドを送信して処理します
+      operationId: sendCommand
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: コマンドを送信するセッションのID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendCommandRequest'
+      responses:
+        '202':
+          description: コマンドが正常に受け付けられました
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendCommandResponse'
+        '400':
+          description: 無効なリクエストパラメータ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 指定されたセッションIDが見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    CreateSessionRequest:
+      type: object
+      required:
+        - prompt
+      properties:
+        prompt:
+          type: string
+          description: セッション開始時のユーザープロンプト
+    CreateSessionResponse:
+      type: object
+      required:
+        - session_id
+        - status
+      properties:
+        session_id:
+          type: string
+          description: 作成されたセッションのID
+        status:
+          type: string
+          description: セッションの状態 (accepted)
+    SendCommandRequest:
+      type: object
+      required:
+        - command
+      properties:
+        command:
+          type: string
+          description: セッションに送信するコマンド
+    SendCommandResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: コマンド受付状態のメッセージ
+    Session:
+      type: object
+      required:
+        - id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: セッションの一意識別子
+        created_at:
+          type: string
+          format: date-time
+          description: セッション作成日時
+        updated_at:
+          type: string
+          format: date-time
+          description: セッション最終更新日時
+        serialized_history:
+          type: array
+          description: セッション履歴
+          items:
+            $ref: '#/components/schemas/SerializableContent'
+    SerializableContent:
+      type: object
+      required:
+        - role
+        - parts
+      properties:
+        role:
+          type: string
+          description: コンテンツの役割 (user/model)
+          enum:
+            - user
+            - model
+        parts:
+          type: array
+          description: コンテンツのパート
+          items:
+            $ref: '#/components/schemas/SerializablePart'
+    SerializablePart:
+      type: object
+      required:
+        - type
+        - content
+      properties:
+        type:
+          type: string
+          description: パートのタイプ
+          example: text
+        content:
+          type: string
+          description: パートの内容
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: エラーメッセージ 

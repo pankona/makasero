@@ -2,84 +2,106 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/pankona/makasero"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestHandleCreateSession(t *testing.T) {
-	tempDir := t.TempDir()
-	_, _, _ = SetupTestEnvironment(t, tempDir)
+func TestCreateSession(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "test-api-key")
 
-	tests := []struct {
-		name           string
-		requestBody    CreateSessionRequest
-		expectedStatus int
-		checkResponse  func(*testing.T, *httptest.ResponseRecorder, string)
-	}{
-		{
-			name: "正常なリクエスト (echo)",
-			requestBody: CreateSessionRequest{
-				Prompt: "テストプロンプト",
-			},
-			expectedStatus: http.StatusCreated,
-			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder, expectedSessionID string) {
-				var response CreateSessionResponse
-				bodyBytes := w.Body.Bytes()
-				if err := json.NewDecoder(bytes.NewReader(bodyBytes)).Decode(&response); err != nil {
-					t.Errorf("レスポンスのデコードに失敗: %v. Body: %s", err, string(bodyBytes))
-					return
-				}
-				if response.SessionID == "" {
-					t.Error("SessionIDが空です")
-				}
-				if response.Status != "pending" {
-					t.Errorf("期待されるステータス 'pending' に対して、実際は '%s' でした", response.Status)
-				}
-			},
-		},
-		{
-			name: "空のプロンプト",
-			requestBody: CreateSessionRequest{
-				Prompt: "",
-			},
-			expectedStatus: http.StatusBadRequest,
-			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder, expectedSessionID string) {
-				expectedMsg := "Prompt is required\n"
-				if w.Body.String() != expectedMsg {
-					t.Errorf("期待されるエラーメッセージ '%s' と異なります: '%s'", expectedMsg, w.Body.String())
-				}
-			},
-		},
+	mockAgentCreator := &mockAgentCreator{}
+	mockAgent := NewMockAgent()
+	mockAgent.SessionID = "test-session-id"
+	mockAgent.ProcessedPrompt = "test prompt"
+	mockAgentCreator.NewAgentFunc = func(ctx context.Context, apiKey string, config *makasero.MCPConfig, opts ...makasero.AgentOption) (AgentProcessor, error) {
+		mockAgentCreator.CreatedAgent = mockAgent
+		return mockAgent, nil
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sm := setupTestSessionManager(t)
-
-			body, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest(http.MethodPost, "/api/sessions", bytes.NewBuffer(body))
-			rr := httptest.NewRecorder()
-			handleCreateSession(rr, req, sm)
-
-			var generatedSessionID string
-			if rr.Code == http.StatusCreated {
-				var resp CreateSessionResponse
-				if err := json.NewDecoder(bytes.NewReader(rr.Body.Bytes())).Decode(&resp); err == nil {
-					generatedSessionID = resp.SessionID
-				} else {
-					t.Errorf("正常リクエストのはずがレスポンスのデコードに失敗: %v", err)
-				}
-			}
-
-			if rr.Code != tt.expectedStatus {
-				t.Errorf("期待されるステータスコード %d に対して、実際は %d でした. Body: %s", tt.expectedStatus, rr.Code, rr.Body.String())
-			}
-
-			if tt.checkResponse != nil {
-				tt.checkResponse(t, rr, generatedSessionID)
-			}
-		})
+	sm := &SessionManager{
+		apiKey:        "test-api-key",
+		modelName:     "test-model",
+		configPath:    "/fake/config.json",
+		configLoader:  &mockConfigLoader{},
+		agentCreator:  mockAgentCreator,
+		sessionLoader: &mockSessionLoader{},
 	}
+
+	server := createTestServer(t, sm)
+	defer server.Close()
+
+	prompt := "テストプロンプト"
+	reqBody := CreateSessionRequest{Prompt: prompt}
+	jsonBody, _ := json.Marshal(reqBody)
+
+	req, _ := http.NewRequest("POST", server.URL+"/api/sessions", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusAccepted, resp.StatusCode, "ステータスコードは 202 Accepted であるべき")
+
+	var respData CreateSessionResponse
+	err = json.NewDecoder(resp.Body).Decode(&respData)
+	require.NoError(t, err, "レスポンスボディの JSON デコードに成功すべき")
+
+	assert.NotEmpty(t, respData.SessionID, "レスポンスには session_id が含まれるべき")
+	assert.Equal(t, "accepted", respData.Status, "レスポンスの status は accepted であるべき")
+
+	select {
+	case receivedPrompt := <-mockAgent.ProcessMessageChan:
+		assert.Equal(t, prompt, receivedPrompt, "goroutine 内で ProcessMessage が正しいプロンプトで呼ばれるべき")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout: mockAgent.ProcessMessage が時間内に呼び出されませんでした")
+	}
+
+	select {
+	case <-mockAgent.CloseChan:
+		mockAgent.mu.Lock()
+		closeCalled := mockAgent.CloseCalled
+		mockAgent.mu.Unlock()
+		assert.True(t, closeCalled, "goroutine 内で Close が呼ばれるべき")
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timeout: mockAgent.Close が時間内に呼び出されませんでした")
+	}
+
+	require.NotNil(t, mockAgentCreator.CreatedAgent, "AgentCreator が Agent を生成しているべき")
+	require.Equal(t, mockAgent.SessionID, "test-session-id", "SessionIDが正しく設定されているべき")
+	require.Equal(t, mockAgent.ProcessedPrompt, "test prompt", "ProcessedPromptが正しく設定されているべき")
+}
+
+func TestCreateSession_EmptyPrompt(t *testing.T) {
+	sm := &SessionManager{
+		apiKey:        "test-api-key",
+		modelName:     "test-model",
+		configPath:    "/fake/config.json",
+		configLoader:  &mockConfigLoader{},
+		agentCreator:  &mockAgentCreator{},
+		sessionLoader: &mockSessionLoader{},
+	}
+	server := createTestServer(t, sm)
+	defer server.Close()
+
+	reqBody := CreateSessionRequest{Prompt: ""}
+	jsonBody, _ := json.Marshal(reqBody)
+
+	req, _ := http.NewRequest("POST", server.URL+"/api/sessions", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "空プロンプトの場合は 400 Bad Request であるべき")
 }
