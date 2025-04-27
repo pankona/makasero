@@ -249,10 +249,10 @@ func TestHandleGetSessionStatus(t *testing.T) {
 		},
 		{
 			name:      "存在するセッション",
-			sessionID: "existing-task",
+			sessionID: "existing-session",
 			setupSessionFile: func(t *testing.T) {
-				sessionFilePath := filepath.Join(sessionsDir, "existing-task.json")
-				dummyData := `{"id": "existing-task", "status": "running"}`
+				sessionFilePath := filepath.Join(sessionsDir, "existing-session.json")
+				dummyData := `{"id": "existing-session", "status": "running"}`
 				if err := os.WriteFile(sessionFilePath, []byte(dummyData), 0644); err != nil {
 					t.Fatalf("テスト用セッションファイルの作成に失敗: %v", err)
 				}
@@ -265,8 +265,8 @@ func TestHandleGetSessionStatus(t *testing.T) {
 					t.Errorf("レスポンスのJSONデコードに失敗: %v. Body: %s", err, string(bodyBytes))
 					return
 				}
-				if id, ok := data["id"].(string); !ok || id != "existing-task" {
-					t.Errorf("期待されるID 'existing-task' がレスポンスに含まれていません: %v", data)
+				if id, ok := data["id"].(string); !ok || id != "existing-session" {
+					t.Errorf("期待されるID 'existing-session' がレスポンスに含まれていません: %v", data)
 				}
 				if status, ok := data["status"].(string); !ok || status != "running" {
 					t.Errorf("期待されるステータス 'running' がレスポンスに含まれていません: %v", data)
