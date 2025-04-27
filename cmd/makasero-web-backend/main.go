@@ -65,31 +65,40 @@ func NewSessionManager() *SessionManager {
 	}
 }
 
-func (sm *SessionManager) StartSession(prompt string) (string, error) {
-	sessionID := uuid.New().String()
-
-	homeDir, err := os.UserHomeDir()
+func setupMakaseroEnvironment() (homeDir, configPath, sessionsDir string, err error) {
+	homeDir, err = os.UserHomeDir()
 	if err != nil {
 		log.Printf("Error getting user home directory: %v. Falling back to current directory for .makasero.", err)
-		return "", fmt.Errorf("failed to get home directory: %w", err)
+		return "", "", "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 
 	makaseroDir := filepath.Join(homeDir, ".makasero")
 	if err := os.MkdirAll(makaseroDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create .makasero directory: %w", err)
+		return "", "", "", fmt.Errorf("failed to create .makasero directory: %w", err)
 	}
 
-	sessionsDir := filepath.Join(makaseroDir, "sessions")
+	sessionsDir = filepath.Join(makaseroDir, "sessions")
 	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create sessions directory: %w", err)
+		return "", "", "", fmt.Errorf("failed to create sessions directory: %w", err)
 	}
 
-	configPath := filepath.Join(makaseroDir, "config.json")
+	configPath = filepath.Join(makaseroDir, "config.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultConfig := []byte(`{"mcpServers":{}}`)
 		if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
-			return "", fmt.Errorf("failed to create config file '%s': %w", configPath, err)
+			return "", "", "", fmt.Errorf("failed to create config file '%s': %w", configPath, err)
 		}
+	}
+	
+	return homeDir, configPath, sessionsDir, nil
+}
+
+func (sm *SessionManager) StartSession(prompt string) (string, error) {
+	sessionID := uuid.New().String()
+
+	homeDir, configPath, sessionsDir, err := setupMakaseroEnvironment()
+	if err != nil {
+		return "", err
 	}
 
 	log.Printf("Starting session with ID: %s", sessionID)
@@ -164,28 +173,9 @@ func (sm *SessionManager) StartSession(prompt string) (string, error) {
 }
 
 func (sm *SessionManager) SendCommand(sessionID, command string) error {
-	homeDir, err := os.UserHomeDir()
+	_, configPath, _, err := setupMakaseroEnvironment()
 	if err != nil {
-		log.Printf("Error getting user home directory: %v. Falling back to current directory for .makasero.", err)
-		return fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	makaseroDir := filepath.Join(homeDir, ".makasero")
-	if err := os.MkdirAll(makaseroDir, 0755); err != nil {
-		return fmt.Errorf("failed to create .makasero directory: %w", err)
-	}
-
-	sessionsDir := filepath.Join(makaseroDir, "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create sessions directory: %w", err)
-	}
-
-	configPath := filepath.Join(makaseroDir, "config.json")
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		defaultConfig := []byte(`{"mcpServers":{}}`)
-		if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
-			return fmt.Errorf("failed to create config file '%s': %w", configPath, err)
-		}
+		return err
 	}
 
 	if len(sm.makaseroCmd) == 0 {
@@ -255,9 +245,9 @@ func (sm *SessionManager) SendCommand(sessionID, command string) error {
 }
 
 func (sm *SessionManager) GetSessionStatus(sessionID string) ([]byte, error) {
-	homeDir, err := os.UserHomeDir()
+	homeDir, _, _, err := setupMakaseroEnvironment()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
+		return nil, err
 	}
 
 	possiblePaths := []string{
