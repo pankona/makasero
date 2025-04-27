@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-func setupTestTaskManager(t *testing.T) *TaskManager {
+func setupTestSessionManager(t *testing.T) *SessionManager {
 	t.Setenv("GEMINI_API_KEY", "test-api-key")
 
 	var echoCmdPath string
@@ -33,12 +33,12 @@ func setupTestTaskManager(t *testing.T) *TaskManager {
 		}
 		echoArgs = []string{"dummy"}
 	}
-	return &TaskManager{
+	return &SessionManager{
 		makaseroCmd: append([]string{echoCmdPath}, echoArgs...),
 	}
 }
 
-func TestHandleCreateTask(t *testing.T) {
+func TestHandleCreateSession(t *testing.T) {
 	tempDir := t.TempDir()
 	makaseroDir := filepath.Join(tempDir, ".makasero")
 	sessionsDir := filepath.Join(makaseroDir, "sessions")
@@ -51,25 +51,25 @@ func TestHandleCreateTask(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		requestBody    CreateTaskRequest
+		requestBody    CreateSessionRequest
 		expectedStatus int
 		checkResponse  func(*testing.T, *httptest.ResponseRecorder, string)
 	}{
 		{
 			name: "正常なリクエスト (echo)",
-			requestBody: CreateTaskRequest{
+			requestBody: CreateSessionRequest{
 				Prompt: "テストプロンプト",
 			},
 			expectedStatus: http.StatusCreated,
-			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder, expectedTaskID string) {
-				var response CreateTaskResponse
+			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder, expectedSessionID string) {
+				var response CreateSessionResponse
 				bodyBytes := w.Body.Bytes()
 				if err := json.NewDecoder(bytes.NewReader(bodyBytes)).Decode(&response); err != nil {
 					t.Errorf("レスポンスのデコードに失敗: %v. Body: %s", err, string(bodyBytes))
 					return
 				}
-				if response.TaskID == "" {
-					t.Error("TaskIDが空です")
+				if response.SessionID == "" {
+					t.Error("SessionIDが空です")
 				}
 				if response.Status != "pending" {
 					t.Errorf("期待されるステータス 'pending' に対して、実際は '%s' でした", response.Status)
@@ -78,11 +78,11 @@ func TestHandleCreateTask(t *testing.T) {
 		},
 		{
 			name: "空のプロンプト",
-			requestBody: CreateTaskRequest{
+			requestBody: CreateSessionRequest{
 				Prompt: "",
 			},
 			expectedStatus: http.StatusBadRequest,
-			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder, expectedTaskID string) {
+			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder, expectedSessionID string) {
 				expectedMsg := "Prompt is required\n"
 				if w.Body.String() != expectedMsg {
 					t.Errorf("期待されるエラーメッセージ '%s' と異なります: '%s'", expectedMsg, w.Body.String())
@@ -102,18 +102,18 @@ func TestHandleCreateTask(t *testing.T) {
 				t.Fatalf("テスト用設定ファイルの作成に失敗: %v", err)
 			}
 
-			tm := setupTestTaskManager(t)
+			sm := setupTestSessionManager(t)
 
 			body, _ := json.Marshal(tt.requestBody)
-			req := httptest.NewRequest(http.MethodPost, "/api/tasks", bytes.NewBuffer(body))
+			req := httptest.NewRequest(http.MethodPost, "/api/sessions", bytes.NewBuffer(body))
 			rr := httptest.NewRecorder()
-			handleCreateTask(rr, req, tm)
+			handleCreateSession(rr, req, sm)
 
-			var generatedTaskID string
+			var generatedSessionID string
 			if rr.Code == http.StatusCreated {
-				var resp CreateTaskResponse
+				var resp CreateSessionResponse
 				if err := json.NewDecoder(bytes.NewReader(rr.Body.Bytes())).Decode(&resp); err == nil {
-					generatedTaskID = resp.TaskID
+					generatedSessionID = resp.SessionID
 				} else {
 					t.Logf("正常リクエストのはずがレスポンスのデコードに失敗: %v", err)
 				}
@@ -124,7 +124,7 @@ func TestHandleCreateTask(t *testing.T) {
 			}
 
 			if tt.checkResponse != nil {
-				tt.checkResponse(t, rr, generatedTaskID)
+				tt.checkResponse(t, rr, generatedSessionID)
 			}
 		})
 	}
@@ -143,14 +143,14 @@ func TestHandleSendCommand(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		taskID         string
+		sessionID      string
 		requestBody    SendCommandRequest
 		expectedStatus int
 		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
-			name:   "正常なコマンド (echo)",
-			taskID: "test-task-id-send",
+			name:      "正常なコマンド (echo)",
+			sessionID: "test-session-id-send",
 			requestBody: SendCommandRequest{
 				Command: "テストコマンド",
 			},
@@ -169,8 +169,8 @@ func TestHandleSendCommand(t *testing.T) {
 			},
 		},
 		{
-			name:   "空のコマンド",
-			taskID: "test-task-id-send-empty",
+			name:      "空のコマンド",
+			sessionID: "test-session-id-send-empty",
 			requestBody: SendCommandRequest{
 				Command: "",
 			},
@@ -195,14 +195,14 @@ func TestHandleSendCommand(t *testing.T) {
 				t.Fatalf("テスト用設定ファイルの作成に失敗: %v", err)
 			}
 
-			tm := setupTestTaskManager(t)
+			sm := setupTestSessionManager(t)
 
 			body, _ := json.Marshal(tt.requestBody)
-			url := "/api/tasks/" + tt.taskID + "/commands"
+			url := "/api/sessions/" + tt.sessionID + "/commands"
 			req := httptest.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 			w := httptest.NewRecorder()
 
-			handleSendCommand(w, req, tm, tt.taskID)
+			handleSendCommand(w, req, sm, tt.sessionID)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("期待されるステータスコード %d に対して、実際は %d でした. Body: %s", tt.expectedStatus, w.Code, w.Body.String())
@@ -215,7 +215,7 @@ func TestHandleSendCommand(t *testing.T) {
 	}
 }
 
-func TestHandleGetTaskStatus(t *testing.T) {
+func TestHandleGetSessionStatus(t *testing.T) {
 	tempDir := t.TempDir()
 	makaseroDir := filepath.Join(tempDir, ".makasero")
 	sessionsDir := filepath.Join(makaseroDir, "sessions")
@@ -228,19 +228,19 @@ func TestHandleGetTaskStatus(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		taskID           string
+		sessionID        string
 		setupSessionFile func(t *testing.T)
 		expectedStatus   int
 		checkResponse    func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
-			name:   "存在しないタスク",
-			taskID: "non-existent-task",
+			name:      "存在しないセッション",
+			sessionID: "non-existent-session",
 			setupSessionFile: func(t *testing.T) {
 			},
 			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
-				expectedMsgPrefix := "Task not found:"
+				expectedMsgPrefix := "Session not found:"
 				bodyStr := w.Body.String()
 				if !strings.HasPrefix(strings.TrimSpace(bodyStr), expectedMsgPrefix) {
 					t.Errorf("期待されるエラーメッセージの接頭辞 '%s' と異なります: '%s'", expectedMsgPrefix, bodyStr)
@@ -248,8 +248,8 @@ func TestHandleGetTaskStatus(t *testing.T) {
 			},
 		},
 		{
-			name:   "存在するタスク",
-			taskID: "existing-task",
+			name:      "存在するセッション",
+			sessionID: "existing-task",
 			setupSessionFile: func(t *testing.T) {
 				sessionFilePath := filepath.Join(sessionsDir, "existing-task.json")
 				dummyData := `{"id": "existing-task", "status": "running"}`
@@ -287,12 +287,12 @@ func TestHandleGetTaskStatus(t *testing.T) {
 			}
 			tt.setupSessionFile(t)
 
-			tm := setupTestTaskManager(t)
+			sm := setupTestSessionManager(t)
 
-			req := httptest.NewRequest(http.MethodGet, "/api/tasks/"+tt.taskID, nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/sessions/"+tt.sessionID, nil)
 			w := httptest.NewRecorder()
 
-			handleGetTaskStatus(w, req, tm, tt.taskID)
+			handleGetSessionStatus(w, req, sm, tt.sessionID)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("期待されるステータスコード %d に対して、実際は %d でした. Body: %s", tt.expectedStatus, w.Code, w.Body.String())
