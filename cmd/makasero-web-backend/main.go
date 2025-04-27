@@ -15,13 +15,13 @@ import (
 	"github.com/google/uuid"
 )
 
-type CreateTaskRequest struct {
+type CreateSessionRequest struct {
 	Prompt string `json:"prompt"`
 }
 
-type CreateTaskResponse struct {
-	TaskID string `json:"task_id"`
-	Status string `json:"status"`
+type CreateSessionResponse struct {
+	SessionID string `json:"session_id"`
+	Status    string `json:"status"`
 }
 
 type SendCommandRequest struct {
@@ -32,11 +32,11 @@ type SendCommandResponse struct {
 	Message string `json:"message"`
 }
 
-type TaskManager struct {
+type SessionManager struct {
 	makaseroCmd []string // 実行するコマンドと引数
 }
 
-func NewTaskManager() *TaskManager {
+func NewSessionManager() *SessionManager {
 	cmdStr := os.Getenv("MAKASERO_COMMAND")
 	var cmdArgs []string
 
@@ -60,50 +60,59 @@ func NewTaskManager() *TaskManager {
 
 	log.Printf("Using command: %v", cmdArgs) // どのコマンドを使うかログ出力
 
-	return &TaskManager{
+	return &SessionManager{
 		makaseroCmd: cmdArgs,
 	}
 }
 
-func (tm *TaskManager) StartTask(prompt string) (string, error) {
-	taskID := uuid.New().String()
-
-	homeDir, err := os.UserHomeDir()
+func setupMakaseroEnvironment() (homeDir, configPath, sessionsDir string, err error) {
+	homeDir, err = os.UserHomeDir()
 	if err != nil {
 		log.Printf("Error getting user home directory: %v. Falling back to current directory for .makasero.", err)
-		return "", fmt.Errorf("failed to get home directory: %w", err)
+		return "", "", "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 
 	makaseroDir := filepath.Join(homeDir, ".makasero")
 	if err := os.MkdirAll(makaseroDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create .makasero directory: %w", err)
+		return "", "", "", fmt.Errorf("failed to create .makasero directory: %w", err)
 	}
 
-	sessionsDir := filepath.Join(makaseroDir, "sessions")
+	sessionsDir = filepath.Join(makaseroDir, "sessions")
 	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create sessions directory: %w", err)
+		return "", "", "", fmt.Errorf("failed to create sessions directory: %w", err)
 	}
 
-	configPath := filepath.Join(makaseroDir, "config.json")
+	configPath = filepath.Join(makaseroDir, "config.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		defaultConfig := []byte(`{"mcpServers":{}}`)
 		if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
-			return "", fmt.Errorf("failed to create config file '%s': %w", configPath, err)
+			return "", "", "", fmt.Errorf("failed to create config file '%s': %w", configPath, err)
 		}
 	}
+	
+	return homeDir, configPath, sessionsDir, nil
+}
 
-	log.Printf("Starting task with ID: %s", taskID)
+func (sm *SessionManager) StartSession(prompt string) (string, error) {
+	sessionID := uuid.New().String()
+
+	homeDir, configPath, sessionsDir, err := setupMakaseroEnvironment()
+	if err != nil {
+		return "", err
+	}
+
+	log.Printf("Starting session with ID: %s", sessionID)
 	log.Printf("Home directory: %s", homeDir)
 	log.Printf("Config path: %s", configPath)
 	log.Printf("Sessions directory: %s", sessionsDir)
 
-	if len(tm.makaseroCmd) == 0 {
-		return "", fmt.Errorf("makasero command is not configured in TaskManager")
+	if len(sm.makaseroCmd) == 0 {
+		return "", fmt.Errorf("makasero command is not configured in SessionManager")
 	}
-	baseArgs := make([]string, len(tm.makaseroCmd)-1)
-	copy(baseArgs, tm.makaseroCmd[1:])
-	args := append(baseArgs, "-debug", "-config", configPath, "-s", taskID, prompt)
-	cmd := exec.Command(tm.makaseroCmd[0], args...)
+	baseArgs := make([]string, len(sm.makaseroCmd)-1)
+	copy(baseArgs, sm.makaseroCmd[1:])
+	args := append(baseArgs, "-debug", "-config", configPath, "-s", sessionID, prompt)
+	cmd := exec.Command(sm.makaseroCmd[0], args...)
 
 	if os.Getenv("MAKASERO_COMMAND") == "" {
 		cmdDirHome := os.Getenv("HOME")
@@ -145,56 +154,37 @@ func (tm *TaskManager) StartTask(prompt string) (string, error) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		log.Printf("Failed to start command '%s' with args %v in dir '%s': %v", tm.makaseroCmd[0], args, cmd.Dir, err)
-		return "", fmt.Errorf("failed to start task process: %w", err)
+		log.Printf("Failed to start command '%s' with args %v in dir '%s': %v", sm.makaseroCmd[0], args, cmd.Dir, err)
+		return "", fmt.Errorf("failed to start session process: %w", err)
 	}
 
-	log.Printf("Started process with PID: %d for task %s", cmd.Process.Pid, taskID)
+	log.Printf("Started process with PID: %d for session %s", cmd.Process.Pid, sessionID)
 
 	if cmd.Process != nil {
 		err = cmd.Process.Release()
 		if err != nil {
-			log.Printf("Warning: Failed to release process %d for task %s: %v", cmd.Process.Pid, taskID, err)
+			log.Printf("Warning: Failed to release process %d for session %s: %v", cmd.Process.Pid, sessionID, err)
 		}
 	} else {
-		log.Printf("Warning: Command start for task %s succeeded but process is nil. Args: %v", taskID, args)
+		log.Printf("Warning: Command start for session %s succeeded but process is nil. Args: %v", sessionID, args)
 	}
 
-	return taskID, nil
+	return sessionID, nil
 }
 
-func (tm *TaskManager) SendCommand(taskID, command string) error {
-	homeDir, err := os.UserHomeDir()
+func (sm *SessionManager) SendCommand(sessionID, command string) error {
+	_, configPath, _, err := setupMakaseroEnvironment()
 	if err != nil {
-		log.Printf("Error getting user home directory: %v. Falling back to current directory for .makasero.", err)
-		return fmt.Errorf("failed to get home directory: %w", err)
+		return err
 	}
 
-	makaseroDir := filepath.Join(homeDir, ".makasero")
-	if err := os.MkdirAll(makaseroDir, 0755); err != nil {
-		return fmt.Errorf("failed to create .makasero directory: %w", err)
+	if len(sm.makaseroCmd) == 0 {
+		return fmt.Errorf("makasero command is not configured in SessionManager")
 	}
-
-	sessionsDir := filepath.Join(makaseroDir, "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create sessions directory: %w", err)
-	}
-
-	configPath := filepath.Join(makaseroDir, "config.json")
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		defaultConfig := []byte(`{"mcpServers":{}}`)
-		if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
-			return fmt.Errorf("failed to create config file '%s': %w", configPath, err)
-		}
-	}
-
-	if len(tm.makaseroCmd) == 0 {
-		return fmt.Errorf("makasero command is not configured in TaskManager")
-	}
-	baseArgs := make([]string, len(tm.makaseroCmd)-1)
-	copy(baseArgs, tm.makaseroCmd[1:])
-	args := append(baseArgs, "-debug", "-config", configPath, "-s", taskID, command)
-	cmd := exec.Command(tm.makaseroCmd[0], args...)
+	baseArgs := make([]string, len(sm.makaseroCmd)-1)
+	copy(baseArgs, sm.makaseroCmd[1:])
+	args := append(baseArgs, "-debug", "-config", configPath, "-s", sessionID, command)
+	cmd := exec.Command(sm.makaseroCmd[0], args...)
 
 	if os.Getenv("MAKASERO_COMMAND") == "" {
 		cmdDirHome := os.Getenv("HOME")
@@ -236,33 +226,33 @@ func (tm *TaskManager) SendCommand(taskID, command string) error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		log.Printf("Failed to start command '%s' with args %v in dir '%s': %v", tm.makaseroCmd[0], args, cmd.Dir, err)
+		log.Printf("Failed to start command '%s' with args %v in dir '%s': %v", sm.makaseroCmd[0], args, cmd.Dir, err)
 		return fmt.Errorf("failed to send command process: %w", err)
 	}
 
-	log.Printf("Started process with PID: %d for sending command to task %s", cmd.Process.Pid, taskID)
+	log.Printf("Started process with PID: %d for sending command to session %s", cmd.Process.Pid, sessionID)
 
 	if cmd.Process != nil {
 		err = cmd.Process.Release()
 		if err != nil {
-			log.Printf("Warning: Failed to release process %d for task %s command: %v", cmd.Process.Pid, taskID, err)
+			log.Printf("Warning: Failed to release process %d for session %s command: %v", cmd.Process.Pid, sessionID, err)
 		}
 	} else {
-		log.Printf("Warning: Command start for task %s command succeeded but process is nil. Args: %v", taskID, args)
+		log.Printf("Warning: Command start for session %s command succeeded but process is nil. Args: %v", sessionID, args)
 	}
 
 	return nil
 }
 
-func (tm *TaskManager) GetTaskStatus(taskID string) ([]byte, error) {
-	homeDir, err := os.UserHomeDir()
+func (sm *SessionManager) GetSessionStatus(sessionID string) ([]byte, error) {
+	homeDir, _, _, err := setupMakaseroEnvironment()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
+		return nil, err
 	}
 
 	possiblePaths := []string{
-		filepath.Join(homeDir, ".makasero", "sessions", taskID+".json"),
-		filepath.Join(os.Getenv("HOME"), "repos", "makasero", ".makasero", "sessions", taskID+".json"),
+		filepath.Join(homeDir, ".makasero", "sessions", sessionID+".json"),
+		filepath.Join(os.Getenv("HOME"), "repos", "makasero", ".makasero", "sessions", sessionID+".json"),
 	}
 
 	maxRetries := 3
@@ -270,7 +260,7 @@ func (tm *TaskManager) GetTaskStatus(taskID string) ([]byte, error) {
 
 	for _, sessionFilePath := range possiblePaths {
 		log.Printf("Checking for session file at: %s", sessionFilePath)
-
+		
 		for i := 0; i < maxRetries; i++ {
 			if _, err := os.Stat(sessionFilePath); err == nil {
 				data, err := os.ReadFile(sessionFilePath)
@@ -288,11 +278,11 @@ func (tm *TaskManager) GetTaskStatus(taskID string) ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("task not found: %s", taskID)
+	return nil, fmt.Errorf("session not found: %s", sessionID)
 }
 
-func handleCreateTask(w http.ResponseWriter, r *http.Request, tm *TaskManager) {
-	var req CreateTaskRequest
+func handleCreateSession(w http.ResponseWriter, r *http.Request, sm *SessionManager) {
+	var req CreateSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -303,14 +293,14 @@ func handleCreateTask(w http.ResponseWriter, r *http.Request, tm *TaskManager) {
 		return
 	}
 
-	taskID, err := tm.StartTask(req.Prompt)
+	sessionID, err := sm.StartSession(req.Prompt)
 	if err != nil {
-		http.Error(w, "Failed to start task: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to start session: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	resp := CreateTaskResponse{
-		TaskID: taskID,
+	resp := CreateSessionResponse{
+		SessionID: sessionID,
 		Status: "pending",
 	}
 
@@ -319,7 +309,7 @@ func handleCreateTask(w http.ResponseWriter, r *http.Request, tm *TaskManager) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-func handleSendCommand(w http.ResponseWriter, r *http.Request, tm *TaskManager, taskID string) {
+func handleSendCommand(w http.ResponseWriter, r *http.Request, sm *SessionManager, sessionID string) {
 	var req SendCommandRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -331,7 +321,7 @@ func handleSendCommand(w http.ResponseWriter, r *http.Request, tm *TaskManager, 
 		return
 	}
 
-	if err := tm.SendCommand(taskID, req.Command); err != nil {
+	if err := sm.SendCommand(sessionID, req.Command); err != nil {
 		http.Error(w, "Failed to send command: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -344,13 +334,13 @@ func handleSendCommand(w http.ResponseWriter, r *http.Request, tm *TaskManager, 
 	json.NewEncoder(w).Encode(resp)
 }
 
-func handleGetTaskStatus(w http.ResponseWriter, r *http.Request, tm *TaskManager, taskID string) {
-	data, err := tm.GetTaskStatus(taskID)
+func handleGetSessionStatus(w http.ResponseWriter, r *http.Request, sm *SessionManager, sessionID string) {
+	data, err := sm.GetSessionStatus(sessionID)
 	if err != nil {
-		if strings.Contains(err.Error(), "task not found") {
-			http.Error(w, fmt.Sprintf("Task not found: %s", taskID), http.StatusNotFound)
+		if strings.Contains(err.Error(), "session not found") {
+			http.Error(w, fmt.Sprintf("Session not found: %s", sessionID), http.StatusNotFound)
 		} else {
-			http.Error(w, "Failed to get task status: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to get session status: "+err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -378,34 +368,34 @@ func main() {
 	port := flag.String("port", "8080", "Port to listen on")
 	flag.Parse()
 
-	taskManager := NewTaskManager()
+	sessionManager := NewSessionManager()
 
-	http.HandleFunc("/api/tasks", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			handleCreateTask(w, r, taskManager)
+			handleCreateSession(w, r, sessionManager)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
-	http.HandleFunc("/api/tasks/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/sessions/", func(w http.ResponseWriter, r *http.Request) {
 		pathSegments := strings.Split(r.URL.Path, "/")
 		if len(pathSegments) < 4 {
 			http.Error(w, "Invalid path", http.StatusBadRequest)
 			return
 		}
 
-		taskID := pathSegments[3]
+		sessionID := pathSegments[3]
 
 		if len(pathSegments) == 4 {
 			if r.Method == http.MethodGet {
-				handleGetTaskStatus(w, r, taskManager, taskID)
+				handleGetSessionStatus(w, r, sessionManager, sessionID)
 			} else {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
 		} else if len(pathSegments) == 5 && pathSegments[4] == "commands" {
 			if r.Method == http.MethodPost {
-				handleSendCommand(w, r, taskManager, taskID)
+				handleSendCommand(w, r, sessionManager, sessionID)
 			} else {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
