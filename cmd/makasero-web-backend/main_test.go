@@ -106,30 +106,25 @@ func TestHandleCreateTask(t *testing.T) {
 
 			body, _ := json.Marshal(tt.requestBody)
 			req := httptest.NewRequest(http.MethodPost, "/api/tasks", bytes.NewBuffer(body))
-			w := httptest.NewRecorder()
-
 			rr := httptest.NewRecorder()
 			handleCreateTask(rr, req, tm)
-
-			w.WriteHeader(rr.Code)
-			w.Write(rr.Body.Bytes())
 
 			var generatedTaskID string
 			if rr.Code == http.StatusCreated {
 				var resp CreateTaskResponse
-				if err := json.NewDecoder(bytes.NewReader(w.Body.Bytes())).Decode(&resp); err == nil {
+				if err := json.NewDecoder(bytes.NewReader(rr.Body.Bytes())).Decode(&resp); err == nil {
 					generatedTaskID = resp.TaskID
 				} else {
 					t.Logf("正常リクエストのはずがレスポンスのデコードに失敗: %v", err)
 				}
 			}
 
-			if w.Code != tt.expectedStatus {
-				t.Errorf("期待されるステータスコード %d に対して、実際は %d でした. Body: %s", tt.expectedStatus, w.Code, w.Body.String())
+			if rr.Code != tt.expectedStatus {
+				t.Errorf("期待されるステータスコード %d に対して、実際は %d でした. Body: %s", tt.expectedStatus, rr.Code, rr.Body.String())
 			}
 
 			if tt.checkResponse != nil {
-				tt.checkResponse(t, w, generatedTaskID)
+				tt.checkResponse(t, rr, generatedTaskID)
 			}
 		})
 	}
