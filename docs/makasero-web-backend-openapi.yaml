@@ -24,9 +24,10 @@ paths:
         '500':
           description: サーバー内部エラー
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                example: Failed to retrieve sessions
     post:
       summary: 新しいセッションを作成する
       description: ユーザープロンプトを受け取り、非同期で処理を開始する新しいセッションを作成します
@@ -47,15 +48,17 @@ paths:
         '400':
           description: 無効なリクエストパラメータ
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                example: Invalid request body
         '500':
           description: サーバー内部エラー
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                example: Failed to initialize session
   /sessions/{sessionId}:
     get:
       summary: セッションの状態を取得する
@@ -78,15 +81,17 @@ paths:
         '404':
           description: 指定されたセッションIDが見つかりません
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                example: Session not found: {sessionId}
         '500':
           description: サーバー内部エラー
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                example: Failed to get session status
   /sessions/{sessionId}/commands:
     post:
       summary: セッションにコマンドを送信する
@@ -115,21 +120,24 @@ paths:
         '400':
           description: 無効なリクエストパラメータ
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                example: Command is required
         '404':
           description: 指定されたセッションIDが見つかりません
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                example: Session not found: {sessionId}
         '500':
           description: サーバー内部エラー
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                example: Failed to initialize session for command
 components:
   schemas:
     CreateSessionRequest:
@@ -186,7 +194,7 @@ components:
           type: string
           format: date-time
           description: セッション最終更新日時
-        serialized_history:
+        history:
           type: array
           description: セッション履歴
           items:
@@ -219,11 +227,12 @@ components:
           description: パートのタイプ
           example: text
         content:
-          type: string
-          description: パートの内容
+          type: object
+          description: パートの内容 (text, function_call, function_response など型によって構造が変わる)
+          example: {"name": "some_function", "args": {"arg1": "value1"}}
     ErrorResponse:
       type: object
       properties:
         error:
           type: string
-          description: エラーメッセージ 
+          description: エラーメッセージ
