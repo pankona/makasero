@@ -101,6 +101,27 @@ func setupMakaseroEnvironment() (homeDir, configPath, sessionsDir string, err er
 	return homeDir, configPath, sessionsDir, nil
 }
 
+func handleListSessions(w http.ResponseWriter, r *http.Request, sm *SessionManager) {
+	sessions, err := makasero.ListSessions()
+	if err != nil {
+		log.Printf("Failed to list sessions: %v", err)
+		http.Error(w, "Failed to retrieve sessions", http.StatusInternalServerError)
+		return
+	}
+
+	// セッションが見つからない場合でも空のリストを返す (エラーではない)
+	if sessions == nil {
+		sessions = []*makasero.Session{} // 空のスライスを初期化
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(sessions); err != nil {
+		log.Printf("Error encoding session list: %v", err)
+		// ここまで来てエンコードに失敗したら Internal Server Error
+		http.Error(w, "Failed to encode session list", http.StatusInternalServerError)
+	}
+}
+
 func handleCreateSession(w http.ResponseWriter, r *http.Request, sm *SessionManager) {
 	var req CreateSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -281,7 +302,9 @@ func main() {
 	}
 
 	http.HandleFunc("/api/sessions", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
+		if r.Method == http.MethodGet {
+			handleListSessions(w, r, sessionManager)
+		} else if r.Method == http.MethodPost {
 			handleCreateSession(w, r, sessionManager)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

@@ -8,6 +8,25 @@ servers:
     description: makasero Web Backend API エンドポイント
 paths:
   /sessions:
+    get:
+      summary: 既存のセッション一覧を取得する
+      description: サーバーに存在するすべてのセッションのリストを取得します。
+      operationId: getSessions
+      responses:
+        '200':
+          description: セッション一覧が正常に取得されました
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+        '500':
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       summary: 新しいセッションを作成する
       description: ユーザープロンプトを受け取り、非同期で処理を開始する新しいセッションを作成します

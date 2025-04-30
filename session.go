@@ -12,8 +12,12 @@ import (
 	"github.com/google/generative-ai-go/genai"
 )
 
+// SessionDir はセッションファイルを保存するディレクトリパスです。
+// テスト時に変更可能にするためにエクスポートされています。
+var SessionDir = ".makasero/sessions"
+
 const (
-	sessionDir = ".makasero/sessions"
+// sessionDir = ".makasero/sessions"
 )
 
 type Session struct {
@@ -123,13 +127,13 @@ func (s *Session) UnmarshalJSON(data []byte) error {
 }
 
 func SessionExists(id string) bool {
-	path := filepath.Join(sessionDir, id+".json")
+	path := filepath.Join(SessionDir, id+".json")
 	_, err := os.Stat(path)
 	return err == nil
 }
 
 func LoadSession(id string) (*Session, error) {
-	path := filepath.Join(sessionDir, id+".json")
+	path := filepath.Join(SessionDir, id+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -144,18 +148,18 @@ func LoadSession(id string) (*Session, error) {
 }
 
 func SaveSession(session *Session) error {
-	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+	if err := os.MkdirAll(SessionDir, 0755); err != nil {
 		return err
 	}
 
-	path := filepath.Join(sessionDir, session.ID+".json")
+	path := filepath.Join(SessionDir, session.ID+".json")
 	return os.WriteFile(path, mustMarshalIndent(session), 0644)
 }
 
 func ListSessions() ([]*Session, error) {
 	var sessions []*Session
 
-	entries, err := os.ReadDir(sessionDir)
+	entries, err := os.ReadDir(SessionDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return sessions, nil
