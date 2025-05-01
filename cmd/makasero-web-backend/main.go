@@ -291,7 +291,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
-	port := flag.String("port", "8080", "Port to listen on")
+	port := flag.String("port", "3000", "Port to listen on")
 	flag.Parse()
 
 	log.SetPrefix("[makasero-backend] ")

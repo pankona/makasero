@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -12,10 +11,19 @@ const nextConfig = {
     unoptimized: true,
   },
   // This ensures Next.js doesn't interfere with the Vite build
-  output: "export",
   // Ensure all static assets are properly served
   assetPrefix: ".",
   trailingSlash: true,
+
+  // Add rewrites for proxying API requests during development
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://localhost:3000/api/:path*', // Proxy to Backend
+      },
+    ]
+  },
 }
 
 module.exports = nextConfig
