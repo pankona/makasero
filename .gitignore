@@ -1,4 +1,5 @@
 cmd/makasero/makasero
+cmd/makasero-web-backend/makasero-web-backend
 .makasero/sessions/
 prompts
 .vscode/
