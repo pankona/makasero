@@ -1,12 +1,14 @@
 import type { SerializableContent } from "../types"
 import { User, Bot } from "lucide-react"
 import ReactMarkdown from "react-markdown"
+import React from 'react'; // React をインポート
 
 interface MessageItemProps {
   message: SerializableContent
 }
 
-export default function MessageItem({ message }: MessageItemProps) {
+// コンポーネント定義を React.memo でラップ
+const MessageItem = React.memo(({ message }: MessageItemProps) => {
   // Function to render message content based on part type
   const renderContent = (part: any) => {
     if (part.type === "text") {
@@ -53,4 +55,7 @@ export default function MessageItem({ message }: MessageItemProps) {
       </div>
     </div>
   )
-}
+});
+
+// React.memo でラップしたコンポーネントを default export する
+export default MessageItem;
