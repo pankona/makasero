@@ -5,7 +5,8 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useParams, Link } from "react-router-dom"
 import type { Session } from "../types"
-import { ArrowLeft, Send, AlertCircle, RefreshCw } from "lucide-react"
+// ↓ Loader2 を追加
+import { ArrowLeft, Send, AlertCircle, RefreshCw, Loader2 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import MessageItem from "./MessageItem"
 
@@ -64,6 +65,7 @@ export default function SessionDetail({ onSessionUpdated }: SessionDetailProps) 
       })
 
       if (!response.ok) {
+        setSending(false);
         throw new Error("Failed to send command")
       }
 
@@ -76,8 +78,7 @@ export default function SessionDetail({ onSessionUpdated }: SessionDetailProps) 
     } catch (err) {
       setError("Failed to send command. Please try again.")
       console.error(err)
-    } finally {
-      setSending(false)
+      setSending(false);
     }
   }
 
@@ -100,6 +101,7 @@ export default function SessionDetail({ onSessionUpdated }: SessionDetailProps) 
     // Scroll to bottom only if the history length has changed and there are messages
     if (currentLength > 0 && currentLength !== prevLength) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+      setSending(false);
     }
 
     // Update previous history ref
@@ -169,6 +171,12 @@ export default function SessionDetail({ onSessionUpdated }: SessionDetailProps) 
               session.history.map((message, index) => <MessageItem key={index} message={message} />)
             ) : (
               <div className="text-center py-8 text-gray-500">No messages yet</div>
+            )}
+            {sending && (
+              <div className="flex items-center justify-center text-gray-500 py-4">
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                <span>AI is thinking...</span>
+              </div>
             )}
             <div ref={messagesEndRef} />
           </div>
