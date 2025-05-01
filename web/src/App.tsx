@@ -17,7 +17,7 @@ function App() {
   const fetchSessions = async () => {
     try {
       setLoading(true)
-      const response = await fetch("http://localhost:8080/api/sessions")
+      const response = await fetch("/api/sessions")
       if (!response.ok) {
         throw new Error("Failed to fetch sessions")
       }

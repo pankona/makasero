@@ -28,7 +28,7 @@ export default function NewSession({ onSessionCreated }: NewSessionProps) {
       setLoading(true)
       setError(null)
 
-      const response = await fetch("http://localhost:8080/api/sessions", {
+      const response = await fetch("/api/sessions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

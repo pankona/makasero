@@ -29,7 +29,7 @@ export default function SessionDetail({ onSessionUpdated }: SessionDetailProps) 
 
     try {
       setLoading(true)
-      const response = await fetch(`http://localhost:8080/api/sessions/${sessionId}`)
+      const response = await fetch(`/api/sessions/${sessionId}`)
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -56,7 +56,7 @@ export default function SessionDetail({ onSessionUpdated }: SessionDetailProps) 
 
     try {
       setSending(true)
-      const response = await fetch(`http://localhost:8080/api/sessions/${sessionId}/commands`, {
+      const response = await fetch(`/api/sessions/${sessionId}/commands`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
