@@ -15,7 +15,9 @@ install:
 	mkdir -p ~/.makasero/web-frontend
 	
 	@echo "Copying frontend build to ~/.makasero/web-frontend..."
-	cp -r web/.next/static ~/.makasero/web-frontend/
+	mkdir -p ~/.makasero/web-frontend/_next
+	cp -r web/.next/static ~/.makasero/web-frontend/_next/
+	cp -r web/.next/server/app/*.html ~/.makasero/web-frontend/ 2>/dev/null || true
 	cp -r web/public/* ~/.makasero/web-frontend/ 2>/dev/null || true
 	
 	@echo "Installation complete!"
