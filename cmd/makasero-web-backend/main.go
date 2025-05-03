@@ -277,9 +277,11 @@ func handleGetSessionStatus(w http.ResponseWriter, r *http.Request, sm *SessionM
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		}
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
@@ -290,8 +292,35 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// setupDefaultStaticDir attempts to set up and use the default static directory
+func setupDefaultStaticDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("could not determine home directory: %w", err)
+	}
+	
+	defaultStaticDir := filepath.Join(homeDir, ".makasero", "web-frontend")
+	
+	if _, err := os.Stat(defaultStaticDir); err == nil {
+		return defaultStaticDir, nil
+	}
+	
+	if err := os.MkdirAll(defaultStaticDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create default static directory: %w", err)
+	}
+	
+	indexContent := []byte("<html><body><h1>Makasero Web Frontend</h1><p>This directory is ready to serve static frontend files.</p></body></html>")
+	indexPath := filepath.Join(defaultStaticDir, "index.html")
+	if err := os.WriteFile(indexPath, indexContent, 0644); err != nil {
+		return defaultStaticDir, fmt.Errorf("created directory but failed to create placeholder index.html: %w", err)
+	}
+	
+	return defaultStaticDir, nil
+}
+
 func main() {
 	port := flag.String("port", "3000", "Port to listen on")
+	staticDir := flag.String("static-dir", "", "Directory containing static files to serve")
 	flag.Parse()
 
 	log.SetPrefix("[makasero-backend] ")
@@ -301,7 +330,9 @@ func main() {
 		log.Fatalf("Failed to initialize SessionManager: %v", err)
 	}
 
-	http.HandleFunc("/api/sessions", func(w http.ResponseWriter, r *http.Request) {
+	apiMux := http.NewServeMux()
+
+	apiMux.HandleFunc("/api/sessions", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			handleListSessions(w, r, sessionManager)
 		} else if r.Method == http.MethodPost {
@@ -311,7 +342,7 @@ func main() {
 		}
 	})
 
-	http.HandleFunc("/api/sessions/", func(w http.ResponseWriter, r *http.Request) {
+	apiMux.HandleFunc("/api/sessions/", func(w http.ResponseWriter, r *http.Request) {
 		pathSegments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 
 		if len(pathSegments) < 3 {
@@ -343,7 +374,28 @@ func main() {
 		}
 	})
 
-	handler := corsMiddleware(http.DefaultServeMux)
+	mainMux := http.NewServeMux()
+
+	mainMux.Handle("/api/", apiMux)
+
+	if *staticDir == "" {
+		defaultDir, err := setupDefaultStaticDir()
+		if err != nil {
+			log.Fatalf("Failed to set up default static directory: %v", err)
+		}
+		*staticDir = defaultDir
+	}
+	
+	if _, err := os.Stat(*staticDir); os.IsNotExist(err) {
+		log.Fatalf("Static directory '%s' does not exist", *staticDir)
+	}
+	
+	log.Printf("Serving static files from: %s", *staticDir)
+	fs := http.FileServer(http.Dir(*staticDir))
+	
+	mainMux.Handle("/", fs)
+
+	handler := corsMiddleware(mainMux)
 
 	log.Printf("Starting server on :%s", *port)
 	if err := http.ListenAndServe(":"+*port, handler); err != nil {
