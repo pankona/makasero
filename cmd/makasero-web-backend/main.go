@@ -382,7 +382,7 @@ func main() {
 		defaultDir, err := setupDefaultStaticDir()
 		if err != nil {
 			log.Fatalf("Failed to set up default static directory: %v", err)
-		} else if defaultDir != "" {
+		} else {
 			*staticDir = defaultDir
 		}
 	}
