@@ -293,36 +293,29 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 // setupDefaultStaticDir attempts to set up and use the default static directory
-func setupDefaultStaticDir() string {
+func setupDefaultStaticDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Printf("Warning: Could not determine home directory: %v", err)
-		return ""
+		return "", fmt.Errorf("could not determine home directory: %w", err)
 	}
 	
 	defaultStaticDir := filepath.Join(homeDir, ".makasero", "web-frontend")
 	
 	if _, err := os.Stat(defaultStaticDir); err == nil {
-		log.Printf("No static directory specified, using default: %s", defaultStaticDir)
-		return defaultStaticDir
+		return defaultStaticDir, nil
 	}
 	
 	if err := os.MkdirAll(defaultStaticDir, 0755); err != nil {
-		log.Printf("Warning: Failed to create default static directory: %v", err)
-		return ""
+		return "", fmt.Errorf("failed to create default static directory: %w", err)
 	}
-	
-	log.Printf("Created default static directory: %s", defaultStaticDir)
 	
 	indexContent := []byte("<html><body><h1>Makasero Web Frontend</h1><p>This directory is ready to serve static frontend files.</p></body></html>")
 	indexPath := filepath.Join(defaultStaticDir, "index.html")
 	if err := os.WriteFile(indexPath, indexContent, 0644); err != nil {
-		log.Printf("Warning: Failed to create placeholder index.html: %v", err)
-	} else {
-		log.Printf("Created placeholder index.html in %s", defaultStaticDir)
+		return defaultStaticDir, fmt.Errorf("created directory but failed to create placeholder index.html: %w", err)
 	}
 	
-	return defaultStaticDir
+	return defaultStaticDir, nil
 }
 
 func main() {
@@ -386,7 +379,12 @@ func main() {
 	mainMux.Handle("/api/", apiMux)
 
 	if *staticDir == "" {
-		*staticDir = setupDefaultStaticDir()
+		defaultDir, err := setupDefaultStaticDir()
+		if err != nil {
+			log.Printf("Warning: Failed to set up default static directory: %v", err)
+		} else if defaultDir != "" {
+			*staticDir = defaultDir
+		}
 	}
 	
 	if *staticDir != "" {
