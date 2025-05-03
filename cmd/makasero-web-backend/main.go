@@ -343,10 +343,22 @@ func main() {
 	})
 
 	apiMux.HandleFunc("/api/sessions/", func(w http.ResponseWriter, r *http.Request) {
+		// 完全一致 "/api/sessions/" かどうかをチェック
+		if r.URL.Path == "/api/sessions/" {
+			if r.Method == http.MethodGet {
+				handleListSessions(w, r, sessionManager)
+			} else {
+				http.Error(w, "Method not allowed for /api/sessions/", http.StatusMethodNotAllowed)
+			}
+			return // 完全一致の場合は以降の処理をスキップ
+		}
+
+		// "/api/sessions/{sessionID}" や "/api/sessions/{sessionID}/commands" の処理
 		pathSegments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 
 		if len(pathSegments) < 3 {
-			http.Error(w, "Invalid API path", http.StatusBadRequest)
+			// このケースは上の完全一致チェックで処理されるはずだが、念のため
+			http.Error(w, "Invalid API path structure near /api/sessions/", http.StatusBadRequest)
 			return
 		}
 
