@@ -386,27 +386,14 @@ func main() {
 		*staticDir = defaultDir
 	}
 	
-	if *staticDir != "" {
-		if _, err := os.Stat(*staticDir); os.IsNotExist(err) {
-			log.Fatalf("Static directory '%s' does not exist", *staticDir)
-		}
-		
-		log.Printf("Serving static files from: %s", *staticDir)
-		fs := http.FileServer(http.Dir(*staticDir))
-		
-		mainMux.Handle("/", fs)
-	} else {
-		log.Printf("No static directory available, only API endpoints will be available")
-		
-		mainMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/" {
-				w.Header().Set("Content-Type", "text/plain")
-				w.Write([]byte("Makasero Web Backend API Server\n\nUse --static-dir flag to serve static files"))
-			} else {
-				http.NotFound(w, r)
-			}
-		})
+	if _, err := os.Stat(*staticDir); os.IsNotExist(err) {
+		log.Fatalf("Static directory '%s' does not exist", *staticDir)
 	}
+	
+	log.Printf("Serving static files from: %s", *staticDir)
+	fs := http.FileServer(http.Dir(*staticDir))
+	
+	mainMux.Handle("/", fs)
 
 	handler := corsMiddleware(mainMux)
 
