@@ -354,31 +354,37 @@ func main() {
 
 	if *staticDir == "" {
 		homeDir, err := os.UserHomeDir()
-		if err == nil {
-			defaultStaticDir := filepath.Join(homeDir, ".makasero", "web-frontend")
-			if _, err := os.Stat(defaultStaticDir); err == nil {
-				*staticDir = defaultStaticDir
-				log.Printf("No static directory specified, using default: %s", *staticDir)
-			} else {
-				if err := os.MkdirAll(defaultStaticDir, 0755); err == nil {
-					*staticDir = defaultStaticDir
-					log.Printf("Created default static directory: %s", *staticDir)
-					
-					indexContent := []byte("<html><body><h1>Makasero Web Frontend</h1><p>This directory is ready to serve static frontend files.</p></body></html>")
-					indexPath := filepath.Join(defaultStaticDir, "index.html")
-					if err := os.WriteFile(indexPath, indexContent, 0644); err == nil {
-						log.Printf("Created placeholder index.html in %s", defaultStaticDir)
-					} else {
-						log.Printf("Warning: Failed to create placeholder index.html: %v", err)
-					}
-				} else {
-					log.Printf("Warning: Failed to create default static directory: %v", err)
-				}
-			}
-		} else {
+		if err != nil {
 			log.Printf("Warning: Could not determine home directory: %v", err)
+			goto checkStaticDir
+		}
+		
+		defaultStaticDir := filepath.Join(homeDir, ".makasero", "web-frontend")
+		
+		if _, err := os.Stat(defaultStaticDir); err == nil {
+			*staticDir = defaultStaticDir
+			log.Printf("No static directory specified, using default: %s", *staticDir)
+			goto checkStaticDir
+		}
+		
+		if err := os.MkdirAll(defaultStaticDir, 0755); err != nil {
+			log.Printf("Warning: Failed to create default static directory: %v", err)
+			goto checkStaticDir
+		}
+		
+		*staticDir = defaultStaticDir
+		log.Printf("Created default static directory: %s", *staticDir)
+		
+		indexContent := []byte("<html><body><h1>Makasero Web Frontend</h1><p>This directory is ready to serve static frontend files.</p></body></html>")
+		indexPath := filepath.Join(defaultStaticDir, "index.html")
+		if err := os.WriteFile(indexPath, indexContent, 0644); err != nil {
+			log.Printf("Warning: Failed to create placeholder index.html: %v", err)
+		} else {
+			log.Printf("Created placeholder index.html in %s", defaultStaticDir)
 		}
 	}
+	
+checkStaticDir:
 	
 	if *staticDir != "" {
 		if _, err := os.Stat(*staticDir); os.IsNotExist(err) {
