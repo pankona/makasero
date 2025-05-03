@@ -293,28 +293,26 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 // setupDefaultStaticDir attempts to set up and use the default static directory
-func setupDefaultStaticDir(staticDir *string) {
+func setupDefaultStaticDir() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Printf("Warning: Could not determine home directory: %v", err)
-		return
+		return ""
 	}
 	
 	defaultStaticDir := filepath.Join(homeDir, ".makasero", "web-frontend")
 	
 	if _, err := os.Stat(defaultStaticDir); err == nil {
-		*staticDir = defaultStaticDir
-		log.Printf("No static directory specified, using default: %s", *staticDir)
-		return
+		log.Printf("No static directory specified, using default: %s", defaultStaticDir)
+		return defaultStaticDir
 	}
 	
 	if err := os.MkdirAll(defaultStaticDir, 0755); err != nil {
 		log.Printf("Warning: Failed to create default static directory: %v", err)
-		return
+		return ""
 	}
 	
-	*staticDir = defaultStaticDir
-	log.Printf("Created default static directory: %s", *staticDir)
+	log.Printf("Created default static directory: %s", defaultStaticDir)
 	
 	indexContent := []byte("<html><body><h1>Makasero Web Frontend</h1><p>This directory is ready to serve static frontend files.</p></body></html>")
 	indexPath := filepath.Join(defaultStaticDir, "index.html")
@@ -323,6 +321,8 @@ func setupDefaultStaticDir(staticDir *string) {
 	} else {
 		log.Printf("Created placeholder index.html in %s", defaultStaticDir)
 	}
+	
+	return defaultStaticDir
 }
 
 func main() {
@@ -386,7 +386,7 @@ func main() {
 	mainMux.Handle("/api/", apiMux)
 
 	if *staticDir == "" {
-		setupDefaultStaticDir(staticDir)
+		*staticDir = setupDefaultStaticDir()
 	}
 	
 	if *staticDir != "" {
