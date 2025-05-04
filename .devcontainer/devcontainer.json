@@ -1,18 +1,13 @@
 {
   "name": "makasero Codespace",
   "image": "mcr.microsoft.com/devcontainers/universal:2",
-  "postStartCommand": "go run /workspaces/makasero/cmd/makasero-web-backend & (cd /workspaces/makasero/web && npm run dev &)",
+  "postStartCommand": "/home/ubuntu/go/bin/makasero-web-backend",
   "forwardPorts": [
-    3000,
-    3001
+    3000
   ],
   "portsAttributes": {
     "3000": {
-      "label": "Go Backend API",
-      "visibility": "private"
-    },
-    "3001": {
-      "label": "Web Dev Server",
+      "label": "Makasero Web Backend",
       "visibility": "public"
     }
   }
