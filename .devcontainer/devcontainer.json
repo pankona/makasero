@@ -1,7 +1,7 @@
 {
   "name": "makasero Codespace",
   "image": "mcr.microsoft.com/devcontainers/universal:2",
-  "postStartCommand": "make install && makasero-web-backend",
+  "postStartCommand": "make install && make install-claude-code && makasero-web-backend",
   "forwardPorts": [
     3000
   ],

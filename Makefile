@@ -1,4 +1,4 @@
-.PHONY: install
+.PHONY: install install-claude-code
 
 # Default target
 all: install
@@ -21,6 +21,12 @@ install:
 	cp -r web/public/* ~/.makasero/web-frontend/ 2>/dev/null || true
 	
 	@echo "Installation complete!"
+
+# Install Claude Code CLI
+install-claude-code:
+	@echo "Installing Claude Code CLI..."
+	npm install -g @anthropic-ai/claude-code
+	@echo "Claude Code CLI installation complete!"
 
 # Clean build artifacts
 clean:
