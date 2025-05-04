@@ -168,7 +168,7 @@ func SetupTestEnvironment(t *testing.T, tempDir string) (string, string, string)
 		t.Fatalf("テスト用ディレクトリの作成に失敗: %v", err)
 	}
 
-	defaultConfig := []byte(`{"mcpServers":{}}`)
+	defaultConfig := []byte(`{"mcpServers":{"claude":{"command":"claude","args":["mcp","serve"],"env":{}}}}`)
 	if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
 		t.Fatalf("テスト用設定ファイルの作成に失敗: %v", err)
 	}

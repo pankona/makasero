@@ -90,7 +90,7 @@ func setupMakaseroEnvironment() (homeDir, configPath, sessionsDir string, err er
 	configPath = filepath.Join(makaseroDir, "config.json")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		log.Printf("Config file '%s' not found, creating default.", configPath)
-		defaultConfig := []byte(`{"mcpServers":{}}`)
+		defaultConfig := []byte(`{"mcpServers":{"claude":{"command":"claude","args":["mcp","serve"],"env":{}}}}`)
 		if err := os.WriteFile(configPath, defaultConfig, 0644); err != nil {
 			return "", "", "", fmt.Errorf("failed to create config file '%s': %w", configPath, err)
 		}
