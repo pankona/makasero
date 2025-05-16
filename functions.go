@@ -130,6 +130,27 @@ var builtinFunctions = map[string]FunctionDefinition{
 		},
 		Handler: handleAskQuestion,
 	},
+	"gh_issue_view": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "gh_issue_view",
+			Description: "gh issue view コマンドを使って、指定された番号の GitHub issue を表示します。",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"issue_number": {
+						Type:        genai.TypeNumber,
+						Description: "表示する GitHub issue の番号",
+					},
+					"repo": {
+						Type:        genai.TypeString,
+						Description: "リポジトリ名 (例: owner/repo)。指定がない場合は現在のリポジトリとみなされます。",
+					},
+				},
+				Required: []string{"issue_number"},
+			},
+		},
+		Handler: handleGhIssueView,
+	},
 }
 
 func handleGitAdd(ctx context.Context, args map[string]any) (map[string]any, error) {
@@ -251,4 +272,34 @@ func handleAskQuestion(ctx context.Context, args map[string]any) (map[string]any
 		fmt.Printf("  %v\n", option.(string))
 	}
 	return nil, nil
+}
+
+func handleGhIssueView(ctx context.Context, args map[string]any) (map[string]any, error) {
+	issueNumber, ok := args["issue_number"].(float64)
+	if !ok {
+		return map[string]any{
+			"is_error": true,
+			"output":   "issue_number is required and must be a number",
+		}, nil
+	}
+
+	cmdArgs := []string{"issue", "view", fmt.Sprintf("%.0f", issueNumber)}
+
+	if repo, ok := args["repo"].(string); ok && repo != "" {
+		cmdArgs = append(cmdArgs, "--repo", repo)
+	}
+
+	cmd := exec.Command("gh", cmdArgs...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return map[string]any{
+			"is_error": true,
+			"output":   fmt.Sprintf("gh issue view failed: %v\nOutput: %s", err, string(output)),
+		}, nil
+	}
+
+	return map[string]any{
+		"is_error": false,
+		"output":   string(output),
+	}, nil
 }
