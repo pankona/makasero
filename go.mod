@@ -1,11 +1,13 @@
 module github.com/pankona/makasero
 
-go 1.24
+go 1.23
+
+toolchain go1.23.9
 
 require (
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/uuid v1.6.0
-	github.com/mark3labs/mcp-go v0.18.0
+	github.com/mark3labs/mcp-go v0.17.0 // Downgraded from v0.18.0
 	github.com/samber/lo v1.49.1
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/api v0.186.0

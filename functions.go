@@ -9,6 +9,9 @@ import (
 	"github.com/google/generative-ai-go/genai"
 )
 
+// execCommand is used to enable mocking of exec.Command in tests.
+var execCommand = exec.Command
+
 type FunctionHandler func(ctx context.Context, args map[string]any) (map[string]any, error)
 
 type FunctionDefinition struct {
@@ -151,6 +154,31 @@ var builtinFunctions = map[string]FunctionDefinition{
 		},
 		Handler: handleGhIssueView,
 	},
+	"gh_issue_create": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "gh_issue_create",
+			Description: "gh issue create コマンドを使って GitHub issue を作成します。",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"title": {
+						Type:        genai.TypeString,
+						Description: "The title of the issue.",
+					},
+					"body": {
+						Type:        genai.TypeString,
+						Description: "The body content of the issue.",
+					},
+					"repo": {
+						Type:        genai.TypeString,
+						Description: "リポジトリ名 (例: owner/repo)。指定がない場合は現在のリポジトリとみなされます。",
+					},
+				},
+				Required: []string{"title"},
+			},
+		},
+		Handler: handleGhIssueCreate,
+	},
 }
 
 func handleGitAdd(ctx context.Context, args map[string]any) (map[string]any, error) {
@@ -162,12 +190,46 @@ func handleGitAdd(ctx context.Context, args map[string]any) (map[string]any, err
 		}, nil
 	}
 
-	cmd := exec.Command("git", "add", pathToAdd)
+	cmd := execCommand("git", "add", pathToAdd)
 	output, err := cmd.Output()
 	if err != nil {
 		return map[string]any{
 			"is_error": true,
 			"output":   fmt.Sprintf("git add failed: %v", err),
+		}, nil
+	}
+
+	return map[string]any{
+		"is_error": false,
+		"output":   string(output),
+	}, nil
+}
+
+func handleGhIssueCreate(ctx context.Context, args map[string]any) (map[string]any, error) {
+	title, ok := args["title"].(string)
+	if !ok || title == "" {
+		return map[string]any{
+			"is_error": true,
+			"output":   "title is required and cannot be empty",
+		}, nil
+	}
+
+	cmdArgs := []string{"issue", "create", "--title", title}
+
+	if body, ok := args["body"].(string); ok && body != "" {
+		cmdArgs = append(cmdArgs, "--body", body)
+	}
+
+	if repo, ok := args["repo"].(string); ok && repo != "" {
+		cmdArgs = append(cmdArgs, "--repo", repo)
+	}
+
+	cmd := exec.Command("gh", cmdArgs...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return map[string]any{
+			"is_error": true,
+			"output":   fmt.Sprintf("gh issue create failed: %v\nOutput: %s", err, string(output)),
 		}, nil
 	}
 
@@ -186,7 +248,7 @@ func handleGitCommit(ctx context.Context, args map[string]any) (map[string]any, 
 		}, nil
 	}
 
-	cmd := exec.Command("git", "commit", "-m", commitMessage)
+	cmd := execCommand("git", "commit", "-m", commitMessage)
 	output, err := cmd.Output()
 	if err != nil {
 		return map[string]any{
@@ -210,7 +272,7 @@ func handleGitStatus(ctx context.Context, args map[string]any) (map[string]any, 
 		}, nil
 	}
 
-	cmd := exec.Command("git", "status", "--short", "--", pathToStatus)
+	cmd := execCommand("git", "status", "--short", "--", pathToStatus)
 	output, err := cmd.Output()
 	if err != nil {
 		return map[string]any{
@@ -236,9 +298,9 @@ func handleGitDiff(ctx context.Context, args map[string]any) (map[string]any, er
 
 	var cmd *exec.Cmd
 	if staged, ok := args["staged"].(bool); ok && staged {
-		cmd = exec.Command("git", "diff", "--staged", "--", pathToDiff)
+		cmd = execCommand("git", "diff", "--staged", "--", pathToDiff)
 	} else {
-		cmd = exec.Command("git", "diff", "--", pathToDiff)
+		cmd = execCommand("git", "diff", "--", pathToDiff)
 	}
 
 	output, err := cmd.Output()
@@ -289,7 +351,7 @@ func handleGhIssueView(ctx context.Context, args map[string]any) (map[string]any
 		cmdArgs = append(cmdArgs, "--repo", repo)
 	}
 
-	cmd := exec.Command("gh", cmdArgs...)
+	cmd := execCommand("gh", cmdArgs...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return map[string]any{
