@@ -151,6 +151,59 @@ var builtinFunctions = map[string]FunctionDefinition{
 		},
 		Handler: handleGhIssueView,
 	},
+	"gh_issue_create": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "gh_issue_create",
+			Description: "gh issue create コマンドを使って、GitHub Issue を作成します。",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"title": {
+						Type:        genai.TypeString,
+						Description: "Issue のタイトル",
+					},
+					"body": {
+						Type:        genai.TypeString,
+						Description: "Issue の本文",
+					},
+					"labels": {
+						Type:        genai.TypeArray,
+						Description: "付与するラベルの配列 (例: [\"bug\", \"critical\"])",
+						Items: &genai.Schema{
+							Type: genai.TypeString,
+						},
+					},
+					"repo": {
+						Type:        genai.TypeString,
+						Description: "リポジトリ名 (例: owner/repo)。指定がない場合は現在のリポジトリとみなされます。",
+					},
+				},
+				Required: []string{"title", "body"},
+			},
+		},
+		Handler: handleGhIssueCreate,
+	},
+	"create_enhancement_issue": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "create_makasero_enhancement_issue",
+			Description: "makasero 自身の改善案を GitHub Issue として起票します。issue は pankona/makasero リポジトリの issue として起票され、自動的に 'enhancement' ラベルが付与されます。",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"title": {
+						Type:        genai.TypeString,
+						Description: "Issue のタイトル",
+					},
+					"body": {
+						Type:        genai.TypeString,
+						Description: "Issue の本文",
+					},
+				},
+				Required: []string{"title", "body"},
+			},
+		},
+		Handler: handleCreateEnhancementIssue,
+	},
 }
 
 func handleGitAdd(ctx context.Context, args map[string]any) (map[string]any, error) {
@@ -283,9 +336,60 @@ func handleGhIssueView(ctx context.Context, args map[string]any) (map[string]any
 		}, nil
 	}
 
-	cmdArgs := []string{"issue", "view", fmt.Sprintf("%.0f", issueNumber)}
+	repo, _ := args["repo"].(string)
 
-	if repo, ok := args["repo"].(string); ok && repo != "" {
+	var cmd *exec.Cmd
+	if repo != "" {
+		cmd = exec.Command("gh", "issue", "view", fmt.Sprintf("%.0f", issueNumber), "--repo", repo)
+	} else {
+		cmd = exec.Command("gh", "issue", "view", fmt.Sprintf("%.0f", issueNumber))
+	}
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return map[string]any{
+			"is_error": true,
+			"output":   fmt.Sprintf("gh issue view failed: %v\nOutput: %s", err, string(output)),
+		}, nil
+	}
+
+	return map[string]any{
+		"is_error": false,
+		"output":   string(output),
+	}, nil
+}
+
+func handleGhIssueCreate(ctx context.Context, args map[string]any) (map[string]any, error) {
+	title, ok := args["title"].(string)
+	if !ok {
+		return map[string]any{
+			"is_error": true,
+			"output":   "title is required",
+		}, nil
+	}
+
+	body, ok := args["body"].(string)
+	if !ok {
+		return map[string]any{
+			"is_error": true,
+			"output":   "body is required",
+		}, nil
+	}
+
+	repo, _ := args["repo"].(string)
+
+	var cmdArgs []string
+	cmdArgs = append(cmdArgs, "issue", "create", "--title", title, "--body", body)
+
+	if labelsStr, ok := args["labels"].([]any); ok {
+		for _, label := range labelsStr {
+			if labelStr, ok := label.(string); ok {
+				cmdArgs = append(cmdArgs, "--label", labelStr)
+			}
+		}
+	}
+
+	if repo != "" {
 		cmdArgs = append(cmdArgs, "--repo", repo)
 	}
 
@@ -294,7 +398,46 @@ func handleGhIssueView(ctx context.Context, args map[string]any) (map[string]any
 	if err != nil {
 		return map[string]any{
 			"is_error": true,
-			"output":   fmt.Sprintf("gh issue view failed: %v\nOutput: %s", err, string(output)),
+			"output":   fmt.Sprintf("gh issue create failed: %v\nOutput: %s", err, string(output)),
+		}, nil
+	}
+
+	return map[string]any{
+		"is_error": false,
+		"output":   string(output),
+	}, nil
+}
+
+func handleCreateEnhancementIssue(ctx context.Context, args map[string]any) (map[string]any, error) {
+	title, ok := args["title"].(string)
+	if !ok {
+		return map[string]any{
+			"is_error": true,
+			"output":   "title is required",
+		}, nil
+	}
+
+	body, ok := args["body"].(string)
+	if !ok {
+		return map[string]any{
+			"is_error": true,
+			"output":   "body is required",
+		}, nil
+	}
+
+	// repo パラメータの受付を削除し、固定値を設定
+	const fixedRepo = "pankona/makasero"
+
+	var cmdArgs []string
+	// 改善提案なので、必ず enhancement ラベルを付与し、固定のリポジトリを指定する
+	cmdArgs = append(cmdArgs, "issue", "create", "--title", title, "--body", body, "--label", "enhancement", "--repo", fixedRepo)
+
+	cmd := exec.Command("gh", cmdArgs...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return map[string]any{
+			"is_error": true,
+			"output":   fmt.Sprintf("gh issue create for enhancement failed: %v\\nOutput: %s", err, string(output)),
 		}, nil
 	}
 
