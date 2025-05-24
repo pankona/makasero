@@ -8,7 +8,7 @@ permissions:
   issues: write # Needed to allow gh to post comments
 
 jobs:
-  build:
+  build_and_run_makasero: # Consolidated job name
     runs-on: ubuntu-latest
     if: startsWith(github.event.comment.body, '/makasero')
     steps:
@@ -21,20 +21,13 @@ jobs:
       - name: Build makasero CLI
         run: |
           cd cmd/makasero
-          go build -o /usr/local/bin/makasero
+          # Build and place the binary in a known location
+          go build -o $GITHUB_WORKSPACE/makasero_binary 
           cd -
-  process-comment:
-    needs: build # Run after the build job is complete
-    runs-on: ubuntu-latest
-    if: startsWith(github.event.comment.body, '/makasero')
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
       - name: Extract command and arguments
         id: extract_command
         run: |
           COMMENT_BODY="${{ github.event.comment.body }}"
-          # Remove /makasero prefix and trim leading/trailing whitespace
           MAKASERO_ARGS=$(echo "${COMMENT_BODY#/makasero}" | xargs)
           echo "args=$MAKASERO_ARGS" >> $GITHUB_OUTPUT
       - name: Get issue description
@@ -45,17 +38,13 @@ jobs:
           echo "$ISSUE_BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
         env:
-          GH_TOKEN: ${{ github.token }} # Use the default GitHub token
+          GH_TOKEN: ${{ github.token }}
       - name: Run makasero
         id: run_makasero
         run: |
-          # Save issue body to a temporary file
           echo "${{ steps.get_issue.outputs.body }}" > issue_body.txt
-          
-          # Run makasero with issue body from file and arguments
-          # Capture stdout and stderr
-          MAKASERO_OUTPUT=$(makasero -f issue_body.txt ${{ steps.extract_command.outputs.args }} 2>&1)
-          
+          # Execute the binary from the known location
+          MAKASERO_OUTPUT=$($GITHUB_WORKSPACE/makasero_binary -f issue_body.txt ${{ steps.extract_command.outputs.args }} 2>&1)
           echo "output<<EOF" >> $GITHUB_OUTPUT
           echo "$MAKASERO_OUTPUT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -68,4 +57,4 @@ jobs:
           ${{ steps.run_makasero.outputs.output }}
           \`\`\`"
         env:
-          GH_TOKEN: ${{ github.token }} # Use the default GitHub token
+          GH_TOKEN: ${{ github.token }}
