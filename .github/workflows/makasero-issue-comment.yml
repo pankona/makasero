@@ -1,0 +1,71 @@
+name: Makasero Issue Comment
+on:
+  issue_comment:
+    types:
+      - created
+
+permissions:
+  issues: write # Needed to allow gh to post comments
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.comment.body, '/makasero')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.x'
+      - name: Build makasero CLI
+        run: |
+          cd cmd/makasero
+          go build -o /usr/local/bin/makasero
+          cd -
+  process-comment:
+    needs: build # Run after the build job is complete
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.comment.body, '/makasero')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Extract command and arguments
+        id: extract_command
+        run: |
+          COMMENT_BODY="${{ github.event.comment.body }}"
+          # Remove /makasero prefix and trim leading/trailing whitespace
+          MAKASERO_ARGS=$(echo "${COMMENT_BODY#/makasero}" | xargs)
+          echo "args=$MAKASERO_ARGS" >> $GITHUB_OUTPUT
+      - name: Get issue description
+        id: get_issue
+        run: |
+          ISSUE_BODY=$(gh issue view ${{ github.event.issue.number }} --json body --jq .body)
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$ISSUE_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }} # Use the default GitHub token
+      - name: Run makasero
+        id: run_makasero
+        run: |
+          # Save issue body to a temporary file
+          echo "${{ steps.get_issue.outputs.body }}" > issue_body.txt
+          
+          # Run makasero with issue body from file and arguments
+          # Capture stdout and stderr
+          MAKASERO_OUTPUT=$(makasero -f issue_body.txt ${{ steps.extract_command.outputs.args }} 2>&1)
+          
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          echo "$MAKASERO_OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: Post comment to issue
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "Makasero Output:
+          \`\`\`
+          ${{ steps.run_makasero.outputs.output }}
+          \`\`\`"
+        env:
+          GH_TOKEN: ${{ github.token }} # Use the default GitHub token
