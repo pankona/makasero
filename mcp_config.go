@@ -27,7 +27,20 @@ func LoadMCPConfig(path string) (*MCPConfig, error) {
 	}
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, fmt.Errorf("config file not found: %s", path)
+		// Create directory if it does not exist
+		dir := filepath.Dir(path)
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return nil, fmt.Errorf("failed to create directory: %v", err)
+			}
+		}
+
+		// Define default configuration
+		defaultConfig := []byte(`{"mcpServers":{"claude":{"command":"claude","args":["mcp","serve"],"env":{}}}}`)
+		if err := os.WriteFile(path, defaultConfig, 0644); err != nil {
+			return nil, fmt.Errorf("failed to write default config file: %v", err)
+		}
+		fmt.Printf("Default config file created at %s\n", path)
 	}
 
 	data, err := os.ReadFile(path)

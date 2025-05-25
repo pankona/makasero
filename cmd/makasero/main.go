@@ -53,7 +53,7 @@ func run() error {
 	// 設定ファイルの読み込み
 	config, err := makasero.LoadMCPConfig(*configFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %v\nPlease create a config file at ~/.makasero/config.json with your MCP server settings", err)
+		return fmt.Errorf("failed to load or initialize MCP config: %v", err)
 	}
 
 	// プロンプトの取得
