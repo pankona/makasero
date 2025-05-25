@@ -30,40 +30,32 @@ jobs:
       - name: Install claude code
         id: install_claude_code
         run: make install-claude-code
-      - name: Extract command and arguments
-        id: extract_command
+      - name: Get issue contents
+        id: get_issue_contents
         run: |
-          COMMENT_BODY="${{ github.event.comment.body }}"
-          MAKASERO_ARGS=$(echo "${COMMENT_BODY#/makasero}" | xargs)
-          echo "args=$MAKASERO_ARGS" >> $GITHUB_OUTPUT
-      - name: Get issue description
-        id: get_issue
-        run: |
-          ISSUE_BODY=$(gh issue view ${{ github.event.issue.number }} --json body --jq .body)
+          ISSUE_CONTENTS=$(gh issue view ${{ github.event.issue.number }} --json body,comments --jq '{body: .body, comments: .comments | map({body: .body, author: .author.login, created_at: .createdAt})}'
           echo "body<<EOF" >> $GITHUB_OUTPUT
-          echo "$ISSUE_BODY" >> $GITHUB_OUTPUT
+          echo "$ISSUE_CONTENTS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Run makasero
         id: run_makasero
         run: |
-          echo "Running command: $GITHUB_WORKSPACE/makasero_binary -f issue_body.txt ${{ steps.extract_command.outputs.args }}"
-          echo "${{ steps.get_issue.outputs.body }}" > issue_body.txt
+          echo "Running command: $GITHUB_WORKSPACE/makasero_binary -f issue_contents.txt"
+          echo "${{ steps.get_issue.outputs.body }}" > issue_contents.txt
           # Execute the binary from the known location
           echo "Makasero output (stdout and stderr combined):"
-          $GITHUB_WORKSPACE/makasero_binary "$(cat issue_body.txt) \n ${{ steps.extract_command.outputs.args }}"
-          MAKASERO_OUTPUT=$($GITHUB_WORKSPACE/makasero_binary "$(cat issue_body.txt) \n ${{ steps.extract_command.outputs.args }}" 2>&1)
+          $GITHUB_WORKSPACE/makasero_binary "$(cat issue_contents.txt)"
+          MAKASERO_OUTPUT=$($GITHUB_WORKSPACE/makasero_binary "$(cat issue_contents.txt)" 2>&1)
           echo "output<<EOF" >> $GITHUB_OUTPUT
           echo "$MAKASERO_OUTPUT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       - name: Post comment to issue
+        id: post_comment
         run: |
-          gh issue comment ${{ github.event.issue.number }} --body "Makasero Output:
-          \`\`\`
-          ${{ steps.run_makasero.outputs.output }}
-          \`\`\`"
+          gh issue comment ${{ github.event.issue.number }} --body "makasero Output: ${{ steps.run_makasero.outputs.output }}"
         env:
           GH_TOKEN: ${{ github.token }}
