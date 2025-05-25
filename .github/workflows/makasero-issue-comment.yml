@@ -49,6 +49,7 @@ jobs:
           echo "${{ steps.get_issue.outputs.body }}" > issue_body.txt
           # Execute the binary from the known location
           echo "Makasero output (stdout and stderr combined):"
+          $GITHUB_WORKSPACE/makasero_binary -f issue_body.txt ${{ steps.extract_command.outputs.args }}
           MAKASERO_OUTPUT=$($GITHUB_WORKSPACE/makasero_binary -f issue_body.txt ${{ steps.extract_command.outputs.args }} 2>&1)
           echo "output<<EOF" >> $GITHUB_OUTPUT
           echo "$MAKASERO_OUTPUT" >> $GITHUB_OUTPUT
