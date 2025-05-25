@@ -183,7 +183,7 @@ var builtinFunctions = map[string]FunctionDefinition{
 		},
 		Handler: handleGhIssueCreate,
 	},
-	"create_enhancement_issue": {
+	"create_makasero_enhancement_issue": {
 		Declaration: &genai.FunctionDeclaration{
 			Name:        "create_makasero_enhancement_issue",
 			Description: "makasero 自身の改善案を GitHub Issue として起票します。issue は pankona/makasero リポジトリの issue として起票され、自動的に 'enhancement' ラベルが付与されます。",
