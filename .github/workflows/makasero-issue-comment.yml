@@ -27,6 +27,9 @@ jobs:
           go build -v -o $GITHUB_WORKSPACE/makasero_binary || true
           cd -
           echo "Go build finished."
+      - name: Install claude code
+        id: install_claude_code
+        run: make install-claude-code
       - name: Extract command and arguments
         id: extract_command
         run: |
