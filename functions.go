@@ -204,6 +204,31 @@ var builtinFunctions = map[string]FunctionDefinition{
 		},
 		Handler: handleCreateEnhancementIssue,
 	},
+	"gh_pr_view": {
+		Declaration: &genai.FunctionDeclaration{
+			Name:        "gh_pr_view",
+			Description: "gh pr view コマンドを使って、指定された番号の GitHub Pull Request を表示します。差分の確認やレビューに役立ちます。",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"pr_number": {
+						Type:        genai.TypeNumber,
+						Description: "表示する GitHub Pull Request の番号",
+					},
+					"repo": {
+						Type:        genai.TypeString,
+						Description: "リポジトリ名 (例: owner/repo)。指定がない場合は現在のリポジトリとみなされます。",
+					},
+					"diff": {
+						Type:        genai.TypeBoolean,
+						Description: "差分を表示するかどうか (--diff オプション)",
+					},
+				},
+				Required: []string{"pr_number"},
+			},
+		},
+		Handler: handleGhPrView,
+	},
 }
 
 func handleGitAdd(ctx context.Context, args map[string]any) (map[string]any, error) {
@@ -438,6 +463,44 @@ func handleCreateEnhancementIssue(ctx context.Context, args map[string]any) (map
 		return map[string]any{
 			"is_error": true,
 			"output":   fmt.Sprintf("gh issue create for enhancement failed: %v\\nOutput: %s", err, string(output)),
+		}, nil
+	}
+
+	return map[string]any{
+		"is_error": false,
+		"output":   string(output),
+	}, nil
+}
+
+func handleGhPrView(ctx context.Context, args map[string]any) (map[string]any, error) {
+	prNumber, ok := args["pr_number"].(float64)
+	if !ok {
+		return map[string]any{
+			"is_error": true,
+			"output":   "pr_number is required and must be a number",
+		}, nil
+	}
+
+	repo, _ := args["repo"].(string)
+	diff, _ := args["diff"].(bool)
+
+	var cmdArgs []string
+	cmdArgs = append(cmdArgs, "pr", "view", fmt.Sprintf("%.0f", prNumber))
+
+	if diff {
+		cmdArgs = append(cmdArgs, "--diff")
+	}
+
+	if repo != "" {
+		cmdArgs = append(cmdArgs, "--repo", repo)
+	}
+
+	cmd := exec.Command("gh", cmdArgs...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return map[string]any{
+			"is_error": true,
+			"output":   fmt.Sprintf("gh pr view failed: %v\nOutput: %s", err, string(output)),
 		}, nil
 	}
 
