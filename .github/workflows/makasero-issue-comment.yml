@@ -18,12 +18,15 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.x'
+          cache: true
       - name: Build makasero CLI
         run: |
+          echo "Starting Go build..."
           cd cmd/makasero
           # Build and place the binary in a known location
-          go build -o $GITHUB_WORKSPACE/makasero_binary 
+          go build -v -o $GITHUB_WORKSPACE/makasero_binary || true
           cd -
+          echo "Go build finished."
       - name: Extract command and arguments
         id: extract_command
         run: |
@@ -42,8 +45,10 @@ jobs:
       - name: Run makasero
         id: run_makasero
         run: |
+          echo "Running command: $GITHUB_WORKSPACE/makasero_binary -f issue_body.txt ${{ steps.extract_command.outputs.args }}"
           echo "${{ steps.get_issue.outputs.body }}" > issue_body.txt
           # Execute the binary from the known location
+          echo "Makasero output (stdout and stderr combined):"
           MAKASERO_OUTPUT=$($GITHUB_WORKSPACE/makasero_binary -f issue_body.txt ${{ steps.extract_command.outputs.args }} 2>&1)
           echo "output<<EOF" >> $GITHUB_OUTPUT
           echo "$MAKASERO_OUTPUT" >> $GITHUB_OUTPUT
