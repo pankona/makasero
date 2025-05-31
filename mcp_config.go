@@ -39,8 +39,8 @@ func LoadMCPConfig(path string) (*MCPConfig, error) {
 
 		// Define default configuration
 		defaultConfig := []byte(`{
-  "systemPrompt": "あなたは専門的なAIアシスタントです。\nユーザーからのタスクを正確に実行し、完了したら必ず'complete'関数を呼び出してください。\n関数を呼び出す際は、関数名をテキストとして書くのではなく、実際に関数を呼び出してください。",
-  "purpose": "高度なタスク実行を行うAIアシスタント",
+  "systemPrompt": "あなたはClaudeと連携したAIアシスタントです。\nユーザーからのタスクを実行し、Claudeの機能を活用して高品質な結果を提供してください。\nタスクが完了したら必ず'complete'関数を呼び出してください。\n関数を呼び出す際は、関数名をテキストとして書くのではなく、実際に関数を呼び出してください。",
+  "purpose": "Claude MCPサーバーと連携してコード生成、分析、改善を行うAIアシスタント",
   "mcpServers": {
     "claude": {
       "command": "claude",
