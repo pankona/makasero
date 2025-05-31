@@ -99,19 +99,21 @@ func run() error {
 		return makasero.PrintSessionHistory(*showHistory)
 	}
 
+	// コンテキストの作成
+	ctx := context.Background()
+	if *debug {
+		ctx = mlog.ContextWithDebug(ctx)
+	}
+
+	// エージェントの初期化
+	agent, err := initializeAgent(ctx)
+	if err != nil {
+		return err
+	}
+	defer agent.Close()
+
 	// function calling 一覧表示の処理
 	if *listFunctionsFlag {
-		ctx := context.Background()
-		if *debug {
-			ctx = mlog.ContextWithDebug(ctx)
-		}
-		
-		agent, err := initializeAgent(ctx)
-		if err != nil {
-			return err
-		}
-		defer agent.Close()
-		
 		agent.ShowAvailableFunctions(ctx)
 		return nil
 	}
@@ -132,20 +134,6 @@ func run() error {
 	} else {
 		return fmt.Errorf("please specify a prompt (command line arguments or -f option)")
 	}
-
-	// コンテキストの作成
-	ctx := context.Background()
-
-	if *debug {
-		ctx = mlog.ContextWithDebug(ctx)
-	}
-
-	// エージェントの初期化
-	agent, err := initializeAgent(ctx)
-	if err != nil {
-		return err
-	}
-	defer agent.Close()
 
 	// 標準エラー出力のキャプチャ
 	stderrReaders := agent.GetStderrReaders()
