@@ -19,6 +19,7 @@ var (
 	listSessionsFlag = flag.Bool("ls", false, "利用可能なセッション一覧を表示")
 	sessionID        = flag.String("s", "", "継続するセッションID（存在しないIDを指定すると新規セッションを開始）")
 	showHistory      = flag.String("sh", "", "指定したセッションIDの会話履歴全文を表示")
+	listFunctionsFlag = flag.Bool("lf", false, "利用可能な function calling 一覧を表示")
 )
 
 func main() {
@@ -36,6 +37,37 @@ func readPromptFromFile(filePath string) (string, error) {
 	return string(content), nil
 }
 
+func showAvailableFunctions() error {
+	// 設定ファイルの読み込み
+	config, err := makasero.LoadMCPConfig("")
+	if err != nil {
+		return fmt.Errorf("failed to load or initialize MCP config: %v", err)
+	}
+
+	// APIキーの取得
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		return fmt.Errorf("GEMINI_API_KEY environment variable is not set")
+	}
+
+	// コンテキストの作成
+	ctx := context.Background()
+
+	// エージェントの初期化
+	agent, err := makasero.NewAgent(ctx, apiKey, config)
+	if err != nil {
+		return fmt.Errorf("failed to initialize agent: %v", err)
+	}
+	defer agent.Close()
+
+	// 利用可能な関数の一覧表示
+	mlog.Infof(ctx, "Declared tools: %d", len(agent.GetAvailableFunctions()))
+	for _, name := range agent.GetAvailableFunctions() {
+		mlog.Infof(ctx, "%s", name)
+	}
+	return nil
+}
+
 func run() error {
 	// コマンドライン引数の処理
 	flag.Parse()
@@ -48,6 +80,11 @@ func run() error {
 	// 会話履歴全文表示の処理
 	if *showHistory != "" {
 		return makasero.PrintSessionHistory(*showHistory)
+	}
+
+	// function calling 一覧表示の処理
+	if *listFunctionsFlag {
+		return showAvailableFunctions()
 	}
 
 	// 設定ファイルの読み込み
@@ -125,12 +162,6 @@ func run() error {
 		go func(r io.Reader) {
 			io.Copy(os.Stderr, r)
 		}(reader)
-	}
-
-	// 利用可能な関数の一覧表示
-	mlog.Infof(ctx, "Declared tools: %d", len(agent.GetAvailableFunctions()))
-	for _, name := range agent.GetAvailableFunctions() {
-		mlog.Infof(ctx, "%s", name)
 	}
 
 	// メッセージの処理
