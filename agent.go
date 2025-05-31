@@ -321,3 +321,11 @@ func (a *Agent) GetAvailableFunctions() []string {
 func (a *Agent) GetStderrReaders() map[string]io.Reader {
 	return a.mcpManager.GetStderrReaders()
 }
+
+func (a *Agent) ShowAvailableFunctions(ctx context.Context) {
+	// 利用可能な関数の一覧表示
+	mlog.Infof(ctx, "Declared tools: %d", len(a.GetAvailableFunctions()))
+	for _, name := range a.GetAvailableFunctions() {
+		mlog.Infof(ctx, "%s", name)
+	}
+}
