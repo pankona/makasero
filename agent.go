@@ -86,11 +86,18 @@ func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...Age
 	agent.client = client
 
 	model := client.GenerativeModel(agent.modelName)
+	
+	// Use system prompt from config, fallback to default if empty
+	systemPrompt := config.SystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = "You are an AI assistant.\n" +
+			"Execute tasks from users and always call the 'complete' function when a task is finished.\n" +
+			"When calling functions, do not write the function name as text, but actually call the function."
+	}
+	
 	model.SystemInstruction = &genai.Content{
 		Parts: []genai.Part{
-			genai.Text("You are an AI assistant.\n" +
-				"Execute tasks from users and always call the 'complete' function when a task is finished.\n" +
-				"When calling functions, do not write the function name as text, but actually call the function."),
+			genai.Text(systemPrompt),
 		},
 	}
 	agent.model = model

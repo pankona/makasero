@@ -8,7 +8,9 @@ import (
 )
 
 type MCPConfig struct {
-	MCPServers map[string]MCPServerConfig `json:"mcpServers"`
+	SystemPrompt string                      `json:"systemPrompt,omitempty"`
+	Purpose      string                      `json:"purpose,omitempty"`
+	MCPServers   map[string]MCPServerConfig  `json:"mcpServers"`
 }
 
 type MCPServerConfig struct {
@@ -36,7 +38,17 @@ func LoadMCPConfig(path string) (*MCPConfig, error) {
 		}
 
 		// Define default configuration
-		defaultConfig := []byte(`{"mcpServers":{"claude":{"command":"claude","args":["mcp","serve"],"env":{}}}}`)
+		defaultConfig := []byte(`{
+  "systemPrompt": "あなたはAIアシスタントです。\nユーザーからのタスクを実行し、タスクが完了したら必ず'complete'関数を呼び出してください。\n関数を呼び出す際は、関数名をテキストとして書くのではなく、実際に関数を呼び出してください。",
+  "purpose": "ユーザーのタスクを効率的に実行するAIアシスタント", 
+  "mcpServers": {
+    "claude": {
+      "command": "claude",
+      "args": ["mcp", "serve"],
+      "env": {}
+    }
+  }
+}`)
 		if err := os.WriteFile(path, defaultConfig, 0644); err != nil {
 			return nil, fmt.Errorf("failed to write default config file: %v", err)
 		}
