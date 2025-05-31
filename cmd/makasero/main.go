@@ -84,23 +84,6 @@ func initializeAgent(ctx context.Context) (*makasero.Agent, error) {
 	return agent, nil
 }
 
-func showAvailableFunctions() error {
-	ctx := context.Background()
-	
-	// エージェントの初期化
-	agent, err := initializeAgent(ctx)
-	if err != nil {
-		return err
-	}
-	defer agent.Close()
-
-	// 利用可能な関数の一覧表示
-	mlog.Infof(ctx, "Declared tools: %d", len(agent.GetAvailableFunctions()))
-	for _, name := range agent.GetAvailableFunctions() {
-		mlog.Infof(ctx, "%s", name)
-	}
-	return nil
-}
 
 func run() error {
 	// コマンドライン引数の処理
@@ -118,7 +101,19 @@ func run() error {
 
 	// function calling 一覧表示の処理
 	if *listFunctionsFlag {
-		return showAvailableFunctions()
+		ctx := context.Background()
+		if *debug {
+			ctx = mlog.ContextWithDebug(ctx)
+		}
+		
+		agent, err := initializeAgent(ctx)
+		if err != nil {
+			return err
+		}
+		defer agent.Close()
+		
+		agent.ShowAvailableFunctions(ctx)
+		return nil
 	}
 
 	// プロンプトの取得
