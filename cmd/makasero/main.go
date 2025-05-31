@@ -39,7 +39,7 @@ func readPromptFromFile(filePath string) (string, error) {
 
 func showAvailableFunctions() error {
 	// 設定ファイルの読み込み
-	config, err := makasero.LoadMCPConfig("")
+	config, err := makasero.LoadMCPConfig(*configFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to load or initialize MCP config: %v", err)
 	}
