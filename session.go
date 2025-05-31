@@ -1,6 +1,7 @@
 package makasero
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
+	"github.com/pankona/makasero/mlog"
 )
 
 // SessionDir はセッションファイルを保存するディレクトリパスです。
