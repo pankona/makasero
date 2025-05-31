@@ -188,7 +188,7 @@ func ListSessionsFromDir(sessionDir string) ([]*Session, error) {
 			id := strings.TrimSuffix(entry.Name(), ".json")
 			session, err := LoadSessionFromDir(sessionDir, id)
 			if err != nil {
-				fmt.Printf("セッション %s の読み込みに失敗: %v\n", id, err)
+				mlog.Warnf(context.Background(), "セッション %s の読み込みに失敗: %v", id, err)
 				continue
 			}
 			sessions = append(sessions, session)
