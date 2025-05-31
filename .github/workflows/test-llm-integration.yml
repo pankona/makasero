@@ -104,7 +104,40 @@ jobs:
           echo "=== Test 3: Session Persistence ==="
           timeout 60s $GITHUB_WORKSPACE/makasero_binary -config test-config.json -s test_session "Create a new session and save it." || echo "Test 3 completed"
           
+          echo "=== Test 4: Session History Verification ==="
+          if [ -f ".makasero/sessions/test_session.json" ]; then
+            echo "✅ Session file created successfully"
+            # Verify the session file contains valid JSON
+            if jq empty .makasero/sessions/test_session.json 2>/dev/null; then
+              echo "✅ Session file contains valid JSON"
+            else
+              echo "⚠️ Warning: Session file contains invalid JSON"
+            fi
+          else
+            echo "⚠️ Warning: Session file not found"
+          fi
+          
           echo "All LLM integration tests completed successfully!"
+          
+      - name: Format session history for comment
+        id: format_session
+        run: |
+          if [ -f ".makasero/sessions/test_session.json" ]; then
+            echo "SESSION_EXISTS=true" >> $GITHUB_OUTPUT
+            
+            # Use external Go script for better maintainability
+            go run .github/scripts/format-session.go > session_output.md
+            
+            # Enhanced security: properly escape multiline output
+            {
+              echo 'SESSION_CONTENT<<EOF'
+              cat session_output.md | sed 's/$//'
+              echo 'EOF'
+            } >> $GITHUB_OUTPUT
+          else
+            echo "SESSION_EXISTS=false" >> $GITHUB_OUTPUT
+            echo 'SESSION_CONTENT=セッション履歴が見つかりませんでした。' >> $GITHUB_OUTPUT
+          fi
           
       - name: Comment test results on issue/PR
         if: github.event_name != 'workflow_dispatch'
@@ -113,16 +146,27 @@ jobs:
           script: |
             const issueNumber = context.issue?.number || context.payload.pull_request?.number;
             if (issueNumber) {
+              const sessionExists = '${{ steps.format_session.outputs.SESSION_EXISTS }}' === 'true';
+              const sessionContent = `${{ steps.format_session.outputs.SESSION_CONTENT }}`;
+              
+              let body = `✅ LLM統合テスト完了
+              
+              **ブランチ**: \`${{ steps.branch.outputs.branch }}\`
+              **コミット**: \`${{ github.sha }}\`
+              **テスト**: 基本的な対話、関数呼び出し、セッション永続化、セッション履歴検証
+              
+              すべてのテストが正常に完了しました！ ✨`;
+              
+              if (sessionExists) {
+                body += `\n\n${sessionContent}`;
+              } else {
+                body += '\n\n⚠️ セッション履歴が利用できません。';
+              }
+              
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
-                body: `✅ LLM Integration Test Completed
-                
-                **Branch**: \`${{ steps.branch.outputs.branch }}\`
-                **Commit**: \`${{ github.sha }}\`
-                **Tests**: Basic interaction, Function calling, Session persistence
-                
-                All tests completed successfully! ✨`
+                body: body
               });
             }
