@@ -22,7 +22,6 @@ type Session struct {
 }
 
 func main() {
-	// Read session file
 	data, err := os.ReadFile(".makasero/sessions/test_session.json")
 	if err != nil {
 		fmt.Printf("Error reading session file: %v\n", err)
@@ -35,22 +34,27 @@ func main() {
 		return
 	}
 
-	// Print header in Japanese
 	fmt.Println("## 🤖 LLMチャット履歴")
 	fmt.Println("")
 
 	for i, content := range session.SerializedHistory {
-		fmt.Printf("### メッセージ %d (%s)\n", i+1, content.Role)
+		roleJP := content.Role
+		if content.Role == "user" {
+			roleJP = "ユーザー"
+		} else if content.Role == "model" {
+			roleJP = "AI"
+		}
+		fmt.Printf("### メッセージ %d (%s)\n", i+1, roleJP)
 
 		for _, part := range content.Parts {
 			switch part.Type {
 			case "text":
-				if textContent, ok := part.Content.(string); ok {
-					fmt.Printf("```\n%s\n```\n", textContent)
+				if text, ok := part.Content.(string); ok {
+					fmt.Printf("```\n%s\n```\n", text)
 				}
 			case "function_call":
 				if fc, ok := part.Content.(map[string]interface{}); ok {
-					// Improved type safety for function calls
+					// Improved type safety - check if Name exists and is not nil
 					if name, exists := fc["Name"]; exists && name != nil {
 						if nameStr, ok := name.(string); ok {
 							fmt.Printf("**関数呼び出し:** `%s`\n", nameStr)
@@ -64,7 +68,7 @@ func main() {
 				}
 			case "function_response":
 				if fr, ok := part.Content.(map[string]interface{}); ok {
-					// Improved type safety for function responses
+					// Improved type safety - check if Name exists and is not nil
 					if name, exists := fr["Name"]; exists && name != nil {
 						if nameStr, ok := name.(string); ok {
 							fmt.Printf("**関数レスポンス:** `%s`\n", nameStr)
