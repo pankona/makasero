@@ -33,6 +33,7 @@ type Agent struct {
 	mcpManager *MCPClientManager
 	apiKey     string
 	modelName  string
+	sessionDir string
 }
 
 type AgentOption func(*Agent)
@@ -58,15 +59,22 @@ func WithModelName(modelName string) AgentOption {
 	}
 }
 
+func WithSessionDir(sessionDir string) AgentOption {
+	return func(a *Agent) {
+		a.sessionDir = sessionDir
+	}
+}
+
 func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...AgentOption) (*Agent, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
 
 	agent := &Agent{
-		apiKey:    apiKey,
-		modelName: "gemini-2.0-flash-lite", // default model
-		functions: make(map[string]FunctionDefinition),
+		apiKey:     apiKey,
+		modelName:  "gemini-2.0-flash-lite", // default model
+		functions:  make(map[string]FunctionDefinition),
+		sessionDir: ".makasero/sessions", // default session directory
 	}
 
 	for _, opt := range opts {
@@ -202,7 +210,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, userInput string) error {
 	mlog.Infof(ctx, "--- Finish session ---")
 	a.session.History = a.chat.History
 	a.session.UpdatedAt = time.Now()
-	if err := SaveSession(a.session); err != nil {
+	if err := a.SaveSession(a.session); err != nil {
 		mlog.Errorf(ctx, "Failed to save session: %v", err)
 		return fmt.Errorf("failed to save session: %v", err)
 	}
@@ -302,7 +310,7 @@ func (a *Agent) GetSession() *Session {
 }
 
 func (a *Agent) LoadSession(sessionID string) error {
-	session, err := LoadSession(sessionID)
+	session, err := a.LoadSessionFromDir(sessionID)
 	if err != nil {
 		return err
 	}
@@ -310,6 +318,26 @@ func (a *Agent) LoadSession(sessionID string) error {
 	a.chat = a.model.StartChat()
 	a.chat.History = session.History
 	return nil
+}
+
+// SessionExists checks if a session exists in the agent's session directory
+func (a *Agent) SessionExists(id string) bool {
+	return SessionExistsInDir(a.sessionDir, id)
+}
+
+// LoadSessionFromDir loads a session from the agent's session directory
+func (a *Agent) LoadSessionFromDir(id string) (*Session, error) {
+	return LoadSessionFromDir(a.sessionDir, id)
+}
+
+// SaveSession saves a session to the agent's session directory
+func (a *Agent) SaveSession(session *Session) error {
+	return SaveSessionToDir(a.sessionDir, session)
+}
+
+// ListSessions lists all sessions in the agent's session directory
+func (a *Agent) ListSessions() ([]*Session, error) {
+	return ListSessionsFromDir(a.sessionDir)
 }
 
 func (a *Agent) handleNotification(notification mcp.JSONRPCNotification) {
