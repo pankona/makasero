@@ -1,6 +1,7 @@
 package makasero
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
+	"github.com/pankona/makasero/mlog"
 )
 
 // SessionDir はセッションファイルを保存するディレクトリパスです。
@@ -127,13 +129,21 @@ func (s *Session) UnmarshalJSON(data []byte) error {
 }
 
 func SessionExists(id string) bool {
-	path := filepath.Join(SessionDir, id+".json")
+	return SessionExistsInDir(SessionDir, id)
+}
+
+func SessionExistsInDir(sessionDir, id string) bool {
+	path := filepath.Join(sessionDir, id+".json")
 	_, err := os.Stat(path)
 	return err == nil
 }
 
 func LoadSession(id string) (*Session, error) {
-	path := filepath.Join(SessionDir, id+".json")
+	return LoadSessionFromDir(SessionDir, id)
+}
+
+func LoadSessionFromDir(sessionDir, id string) (*Session, error) {
+	path := filepath.Join(sessionDir, id+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -148,18 +158,26 @@ func LoadSession(id string) (*Session, error) {
 }
 
 func SaveSession(session *Session) error {
-	if err := os.MkdirAll(SessionDir, 0755); err != nil {
+	return SaveSessionToDir(SessionDir, session)
+}
+
+func SaveSessionToDir(sessionDir string, session *Session) error {
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
 		return err
 	}
 
-	path := filepath.Join(SessionDir, session.ID+".json")
+	path := filepath.Join(sessionDir, session.ID+".json")
 	return os.WriteFile(path, mustMarshalIndent(session), 0644)
 }
 
 func ListSessions() ([]*Session, error) {
+	return ListSessionsFromDir(SessionDir)
+}
+
+func ListSessionsFromDir(sessionDir string) ([]*Session, error) {
 	var sessions []*Session
 
-	entries, err := os.ReadDir(SessionDir)
+	entries, err := os.ReadDir(sessionDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return sessions, nil
@@ -170,9 +188,9 @@ func ListSessions() ([]*Session, error) {
 	for _, entry := range entries {
 		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
 			id := strings.TrimSuffix(entry.Name(), ".json")
-			session, err := LoadSession(id)
+			session, err := LoadSessionFromDir(sessionDir, id)
 			if err != nil {
-				fmt.Printf("セッション %s の読み込みに失敗: %v\n", id, err)
+				mlog.Warnf(context.Background(), "セッション %s の読み込みに失敗: %v", id, err)
 				continue
 			}
 			sessions = append(sessions, session)
