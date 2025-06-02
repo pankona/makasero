@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
