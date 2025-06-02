@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -70,11 +72,17 @@ func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...Age
 		return nil, fmt.Errorf("API key is required")
 	}
 
+	// デフォルトのセッションディレクトリを設定（ホームディレクトリベース）
+	defaultSessionDir := ".makasero/sessions" // フォールバック
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		defaultSessionDir = filepath.Join(homeDir, ".makasero", "sessions")
+	}
+
 	agent := &Agent{
 		apiKey:     apiKey,
 		modelName:  "gemini-2.0-flash-lite", // default model
 		functions:  make(map[string]FunctionDefinition),
-		sessionDir: ".makasero/sessions", // default session directory
+		sessionDir: defaultSessionDir,
 	}
 
 	for _, opt := range opts {
