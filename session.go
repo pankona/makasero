@@ -16,7 +16,18 @@ import (
 
 // SessionDir はセッションファイルを保存するディレクトリパスです。
 // テスト時に変更可能にするためにエクスポートされています。
-var SessionDir = ".makasero/sessions"
+var SessionDir string
+
+func init() {
+	// デフォルトでホームディレクトリの ~/.makasero/sessions を使用
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// ホームディレクトリが取得できない場合は相対パスにフォールバック
+		SessionDir = ".makasero/sessions"
+		return
+	}
+	SessionDir = filepath.Join(homeDir, ".makasero", "sessions")
+}
 
 const (
 // sessionDir = ".makasero/sessions"

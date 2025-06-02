@@ -74,7 +74,7 @@ func NewAgent(ctx context.Context, apiKey string, config *MCPConfig, opts ...Age
 		apiKey:     apiKey,
 		modelName:  "gemini-2.0-flash-lite", // default model
 		functions:  make(map[string]FunctionDefinition),
-		sessionDir: ".makasero/sessions", // default session directory
+		sessionDir: SessionDir,
 	}
 
 	for _, opt := range opts {
