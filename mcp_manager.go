@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/pankona/makasero/mlog"
 )
 
 type MCPClientManager struct {
@@ -38,7 +39,7 @@ func (m *MCPClientManager) InitializeFromConfig(ctx context.Context, config *MCP
 			return fmt.Errorf("failed to initialize MCP client for %s: %v", serverName, err)
 		}
 
-		fmt.Printf("%s mcp server initialize result: %s\n", serverName, initResult)
+		mlog.Debugf(ctx, "%s mcp server initialize result: %s", serverName, initResult)
 
 		m.clientsLock.Lock()
 		m.clients[serverName] = client
