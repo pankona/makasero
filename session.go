@@ -19,14 +19,14 @@ import (
 var SessionDir string
 
 func init() {
-	// デフォルトでホームディレクトリの ~/.makasero/sessions を使用
-	homeDir, err := os.UserHomeDir()
+	// XDG Base Directory仕様に従ったセッションディレクトリを使用
+	sessionsDir, err := GetSessionsDir()
 	if err != nil {
-		// ホームディレクトリが取得できない場合は相対パスにフォールバック
+		// セッションディレクトリが取得できない場合は相対パスにフォールバック
 		SessionDir = ".makasero/sessions"
 		return
 	}
-	SessionDir = filepath.Join(homeDir, ".makasero", "sessions")
+	SessionDir = sessionsDir
 }
 
 const (
