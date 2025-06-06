@@ -1,5 +1,5 @@
 # XDG Base Directory for makasero config
-MAKASERO_CONFIG_DIR := $${XDG_CONFIG_HOME:-$$HOME/.config}/makasero
+MAKASERO_CONFIG_DIR := $${XDG_CONFIG_HOME:-$${HOME:?HOME environment variable not set or empty}/.config}/makasero
 
 .PHONY: install install-claude-code
 
