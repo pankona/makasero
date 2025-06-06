@@ -21,11 +21,11 @@ type MCPServerConfig struct {
 
 func LoadMCPConfig(path string) (*MCPConfig, error) {
 	if path == "" {
-		homeDir, err := os.UserHomeDir()
+		var err error
+		path, err = GetConfigFilePath()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get user home directory: %v", err)
+			return nil, fmt.Errorf("failed to get config file path: %v", err)
 		}
-		path = filepath.Join(homeDir, ".makasero", "config.json")
 	}
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {

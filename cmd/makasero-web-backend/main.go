@@ -77,9 +77,14 @@ func setupMakaseroEnvironment() (homeDir, configPath, sessionsDir string, err er
 		return "", "", "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	makaseroDir := filepath.Join(homeDir, ".makasero")
+	// Use XDG Base Directory specification with backward compatibility
+	makaseroDir, err := makasero.GetConfigDir()
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to get config directory: %w", err)
+	}
+
 	if err := os.MkdirAll(makaseroDir, 0755); err != nil {
-		return "", "", "", fmt.Errorf("failed to create .makasero directory: %w", err)
+		return "", "", "", fmt.Errorf("failed to create makasero directory: %w", err)
 	}
 
 	sessionsDir = filepath.Join(makaseroDir, "sessions")
@@ -294,12 +299,13 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 // setupDefaultStaticDir attempts to set up and use the default static directory
 func setupDefaultStaticDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	// Use XDG Base Directory specification with backward compatibility
+	makaseroDir, err := makasero.GetConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("could not determine home directory: %w", err)
+		return "", fmt.Errorf("failed to get config directory: %w", err)
 	}
 	
-	defaultStaticDir := filepath.Join(homeDir, ".makasero", "web-frontend")
+	defaultStaticDir := filepath.Join(makaseroDir, "web-frontend")
 	
 	if _, err := os.Stat(defaultStaticDir); err == nil {
 		return defaultStaticDir, nil

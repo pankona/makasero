@@ -24,6 +24,7 @@ var (
 	listFunctionsFlag = flag.Bool("lf", false, "利用可能な function calling 一覧を表示")
 )
 
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -188,7 +189,9 @@ func run() error {
 		// コマンドライン引数からプロンプトを取得
 		userInput = strings.Join(args, " ")
 	} else {
-		return fmt.Errorf("please specify a prompt (command line arguments, -f option, or -e option)")
+		// パラメータが指定されていない場合はヘルプを表示
+		flag.Usage()
+		return nil
 	}
 
 	// 標準エラー出力のキャプチャ
