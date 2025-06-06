@@ -11,14 +11,16 @@ install:
 	@echo "Building web frontend..."
 	cd web && npm install --legacy-peer-deps && npm run build
 	
-	@echo "Creating frontend directory if it doesn't exist..."
-	mkdir -p ~/.makasero/web-frontend
+	@echo "Creating frontend directory using XDG Base Directory..."
+	@MAKASERO_CONFIG_DIR=$${XDG_CONFIG_HOME:-$$HOME/.config}/makasero && \
+	mkdir -p "$$MAKASERO_CONFIG_DIR/web-frontend"
 	
-	@echo "Copying frontend build to ~/.makasero/web-frontend..."
-	mkdir -p ~/.makasero/web-frontend/_next
-	cp -r web/.next/static ~/.makasero/web-frontend/_next/
-	cp -r web/.next/server/app/*.html ~/.makasero/web-frontend/ 2>/dev/null || true
-	cp -r web/public/* ~/.makasero/web-frontend/ 2>/dev/null || true
+	@echo "Copying frontend build to XDG config directory..."
+	@MAKASERO_CONFIG_DIR=$${XDG_CONFIG_HOME:-$$HOME/.config}/makasero && \
+	mkdir -p "$$MAKASERO_CONFIG_DIR/web-frontend/_next" && \
+	cp -r web/.next/static "$$MAKASERO_CONFIG_DIR/web-frontend/_next/" && \
+	cp -r web/.next/server/app/*.html "$$MAKASERO_CONFIG_DIR/web-frontend/" 2>/dev/null || true && \
+	cp -r web/public/* "$$MAKASERO_CONFIG_DIR/web-frontend/" 2>/dev/null || true
 	
 	@echo "Installation complete!"
 
@@ -32,6 +34,7 @@ install-claude-code:
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf web/.next
-	rm -rf ~/.makasero/web-frontend/*
+	@MAKASERO_CONFIG_DIR=$${XDG_CONFIG_HOME:-$$HOME/.config}/makasero && \
+	rm -rf "$$MAKASERO_CONFIG_DIR/web-frontend"/*
 	
 	@echo "Clean complete!"
