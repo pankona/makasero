@@ -22,6 +22,28 @@ var (
 	listFunctionsFlag = flag.Bool("lf", false, "利用可能な function calling 一覧を表示")
 )
 
+func showHelp() {
+	fmt.Printf("makasero - Gemini APIを使ったCLI対話ツール\n\n")
+	fmt.Printf("使用方法:\n")
+	fmt.Printf("  makasero [オプション] <プロンプト>\n")
+	fmt.Printf("  makasero [オプション] -f <プロンプトファイル>\n\n")
+	fmt.Printf("例:\n")
+	fmt.Printf("  makasero \"こんにちは\"\n")
+	fmt.Printf("  makasero -f prompt.txt\n")
+	fmt.Printf("  makasero -s session123 \"続きの質問\"\n\n")
+	fmt.Printf("オプション:\n")
+	fmt.Printf("  -f <ファイル>       プロンプトをファイルから読み込む\n")
+	fmt.Printf("  -config <ファイル>   設定ファイルのパスを指定\n")
+	fmt.Printf("  -s <セッションID>    継続するセッションIDを指定（存在しない場合は新規作成）\n")
+	fmt.Printf("  -ls                 利用可能なセッション一覧を表示\n")
+	fmt.Printf("  -sh <セッションID>   指定したセッションの会話履歴を表示\n")
+	fmt.Printf("  -lf                 利用可能なfunction calling一覧を表示\n")
+	fmt.Printf("  -debug              デバッグモードで実行\n\n")
+	fmt.Printf("環境変数:\n")
+	fmt.Printf("  GEMINI_API_KEY      Gemini APIキー（必須）\n")
+	fmt.Printf("  MODEL_NAME          使用するモデル名（オプション）\n\n")
+}
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -132,7 +154,9 @@ func run() error {
 		// コマンドライン引数からプロンプトを取得
 		userInput = strings.Join(args, " ")
 	} else {
-		return fmt.Errorf("please specify a prompt (command line arguments or -f option)")
+		// パラメータが指定されていない場合はヘルプを表示
+		showHelp()
+		return nil
 	}
 
 	// 標準エラー出力のキャプチャ
