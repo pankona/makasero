@@ -23,6 +23,7 @@ func init() {
 	sessionsDir, err := GetSessionsDir()
 	if err != nil {
 		// セッションディレクトリが取得できない場合は相対パスにフォールバック
+		mlog.Warnf(context.Background(), "XDGセッションディレクトリの取得に失敗、相対パスにフォールバック: %v", err)
 		SessionDir = ".makasero/sessions"
 		return
 	}
