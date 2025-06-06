@@ -51,7 +51,10 @@ func readPromptFromEditor() (string, error) {
 		return "", fmt.Errorf("failed to create temporary file: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	tmpFile.Close()
+	
+	if err := tmpFile.Close(); err != nil {
+		return "", fmt.Errorf("failed to close temporary file %s: %v", tmpFile.Name(), err)
+	}
 
 	cmd := exec.Command(editor, tmpFile.Name())
 	cmd.Stdin = os.Stdin
