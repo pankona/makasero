@@ -25,26 +25,17 @@ func TestGetConfigDir(t *testing.T) {
 	tests := []struct {
 		name              string
 		xdgConfigHome     string
-		legacyDirExists   bool
 		expectedPath      string
 	}{
 		{
 			name:            "with XDG_CONFIG_HOME set",
 			xdgConfigHome:   "/tmp/custom-config",
-			legacyDirExists: false,
 			expectedPath:    "/tmp/custom-config/makasero",
 		},
 		{
-			name:            "without XDG_CONFIG_HOME, no legacy dir",
+			name:            "without XDG_CONFIG_HOME",
 			xdgConfigHome:   "",
-			legacyDirExists: false,
 			expectedPath:    filepath.Join(homeDir, ".config", "makasero"),
-		},
-		{
-			name:            "legacy directory exists",
-			xdgConfigHome:   "/tmp/custom-config",
-			legacyDirExists: true,
-			expectedPath:    filepath.Join(homeDir, ".makasero"),
 		},
 	}
 
@@ -55,15 +46,6 @@ func TestGetConfigDir(t *testing.T) {
 				os.Setenv("XDG_CONFIG_HOME", tt.xdgConfigHome)
 			} else {
 				os.Unsetenv("XDG_CONFIG_HOME")
-			}
-
-			// Set up legacy directory if needed
-			legacyDir := filepath.Join(homeDir, ".makasero")
-			if tt.legacyDirExists {
-				os.MkdirAll(legacyDir, 0755)
-				defer os.RemoveAll(legacyDir)
-			} else {
-				os.RemoveAll(legacyDir)
 			}
 
 			configDir, err := GetConfigDir()
@@ -84,10 +66,8 @@ func TestGetSessionsDir(t *testing.T) {
 		t.Fatalf("failed to get home directory: %v", err)
 	}
 
-	// Clear XDG_CONFIG_HOME and ensure no legacy directory exists
+	// Clear XDG_CONFIG_HOME
 	os.Unsetenv("XDG_CONFIG_HOME")
-	legacyDir := filepath.Join(homeDir, ".makasero")
-	os.RemoveAll(legacyDir)
 
 	sessionsDir, err := GetSessionsDir()
 	if err != nil {
@@ -106,10 +86,8 @@ func TestGetConfigFilePath(t *testing.T) {
 		t.Fatalf("failed to get home directory: %v", err)
 	}
 
-	// Clear XDG_CONFIG_HOME and ensure no legacy directory exists
+	// Clear XDG_CONFIG_HOME
 	os.Unsetenv("XDG_CONFIG_HOME")
-	legacyDir := filepath.Join(homeDir, ".makasero")
-	os.RemoveAll(legacyDir)
 
 	configFilePath, err := GetConfigFilePath()
 	if err != nil {
