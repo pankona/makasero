@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/pankona/makasero"
@@ -15,6 +16,7 @@ import (
 var (
 	debug            = flag.Bool("debug", false, "debug mode")
 	promptFile       = flag.String("f", "", "prompt file")
+	editorPrompt     = flag.Bool("e", false, "エディタを使ってプロンプトを入力")
 	configFilePath   = flag.String("config", "", "path to config file")
 	listSessionsFlag = flag.Bool("ls", false, "利用可能なセッション一覧を表示")
 	sessionID        = flag.String("s", "", "継続するセッションID（存在しないIDを指定すると新規セッションを開始）")
@@ -35,6 +37,36 @@ func readPromptFromFile(filePath string) (string, error) {
 		return "", fmt.Errorf("failed to read prompt file: %v", err)
 	}
 	return string(content), nil
+}
+
+func readPromptFromEditor() (string, error) {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		return "", fmt.Errorf("EDITOR environment variable not set")
+	}
+
+	tmpFile, err := os.CreateTemp("", "makasero_prompt_*.txt")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
+	cmd := exec.Command(editor, tmpFile.Name())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("editor exited with error: %v", err)
+	}
+
+	content, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		return "", fmt.Errorf("failed to read temporary file: %v", err)
+	}
+
+	return strings.TrimSpace(string(content)), nil
 }
 
 // initializeAgent はエージェントの初期化処理を共通化する関数
@@ -121,7 +153,31 @@ func run() error {
 	// プロンプトの取得
 	args := flag.Args()
 	var userInput string
+	
+	// オプションの競合チェック
+	optionCount := 0
+	if *editorPrompt {
+		optionCount++
+	}
 	if *promptFile != "" {
+		optionCount++
+	}
+	if len(args) > 0 {
+		optionCount++
+	}
+	
+	if optionCount > 1 {
+		return fmt.Errorf("please specify only one of: command line arguments, -f option, or -e option")
+	}
+	
+	if *editorPrompt {
+		// エディタからプロンプトを読み込む
+		prompt, err := readPromptFromEditor()
+		if err != nil {
+			return err
+		}
+		userInput = prompt
+	} else if *promptFile != "" {
 		// ファイルからプロンプトを読み込む
 		prompt, err := readPromptFromFile(*promptFile)
 		if err != nil {
@@ -132,7 +188,7 @@ func run() error {
 		// コマンドライン引数からプロンプトを取得
 		userInput = strings.Join(args, " ")
 	} else {
-		return fmt.Errorf("please specify a prompt (command line arguments or -f option)")
+		return fmt.Errorf("please specify a prompt (command line arguments, -f option, or -e option)")
 	}
 
 	// 標準エラー出力のキャプチャ
