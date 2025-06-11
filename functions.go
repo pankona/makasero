@@ -133,7 +133,7 @@ var builtinFunctions = map[string]FunctionDefinition{
 	"gh_issue_view": {
 		Declaration: &genai.FunctionDeclaration{
 			Name:        "gh_issue_view",
-			Description: "gh issue view コマンドを使って、指定された番号の GitHub issue を表示します。",
+			Description: "gh issue view コマンドを使って、指定された番号の GitHub issue を表示します。コメント本文も含めて表示されます。",
 			Parameters: &genai.Schema{
 				Type: genai.TypeObject,
 				Properties: map[string]*genai.Schema{
@@ -144,6 +144,10 @@ var builtinFunctions = map[string]FunctionDefinition{
 					"repo": {
 						Type:        genai.TypeString,
 						Description: "リポジトリ名 (例: owner/repo)。指定がない場合は現在のリポジトリとみなされます。",
+					},
+					"include_comments": {
+						Type:        genai.TypeBoolean,
+						Description: "コメントを含めて表示するかどうか (デフォルト: true)",
 					},
 				},
 				Required: []string{"issue_number"},
@@ -362,14 +366,23 @@ func handleGhIssueView(ctx context.Context, args map[string]any) (map[string]any
 	}
 
 	repo, _ := args["repo"].(string)
-
-	var cmd *exec.Cmd
-	if repo != "" {
-		cmd = exec.Command("gh", "issue", "view", fmt.Sprintf("%.0f", issueNumber), "--repo", repo)
-	} else {
-		cmd = exec.Command("gh", "issue", "view", fmt.Sprintf("%.0f", issueNumber))
+	includeComments, exists := args["include_comments"].(bool)
+	if !exists {
+		includeComments = true
 	}
 
+	var cmdArgs []string
+	cmdArgs = append(cmdArgs, "issue", "view", fmt.Sprintf("%.0f", issueNumber))
+
+	if includeComments {
+		cmdArgs = append(cmdArgs, "--comments")
+	}
+
+	if repo != "" {
+		cmdArgs = append(cmdArgs, "--repo", repo)
+	}
+
+	cmd := exec.Command("gh", cmdArgs...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return map[string]any{
