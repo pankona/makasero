@@ -366,10 +366,20 @@ func handleGhIssueView(ctx context.Context, args map[string]any) (map[string]any
 	}
 
 	repo, _ := args["repo"].(string)
-	includeComments, exists := args["include_comments"].(bool)
-	if !exists {
-		includeComments = true
+	includeComments := true // デフォルトでコメントを含める
+	if rawVal, keyExists := args["include_comments"]; keyExists {
+		// 'include_comments' パラメータが指定されている場合
+		boolVal, typeOk := rawVal.(bool)
+		if !typeOk {
+			// 型がboolでない場合はエラー。スキーマ違反よ。
+			return map[string]any{
+				"is_error": true,
+				"output":   fmt.Sprintf("parameter 'include_comments' must be a boolean, but got %T for value '%v'", rawVal, rawVal),
+			}, nil
+		}
+		includeComments = boolVal // 正しいbool値ならそれを使用
 	}
+	// 'include_comments' パラメータが指定されていなければ、デフォルトのtrueが使われる
 
 	var cmdArgs []string
 	cmdArgs = append(cmdArgs, "issue", "view", fmt.Sprintf("%.0f", issueNumber))
